@@ -2,8 +2,6 @@
 Use at your own risk."""
 
 import numpy as np
-from scipy.stats import norm as normal
-
 
 # TODO: learn hyperparmeters using maximum likelihood
 # that seems to be tricky because it might depend from cov function to cov function
@@ -49,8 +47,8 @@ class GaussianProcess(object):
     covariance = covariance.ravel()
     covariance = covariance[0]
 
-    y = normal(loc=mean, scale=covariance).pdf(x)
-    return y
+    # TODO: see what is with the covariance, on how do you return it
+    return mean
 
 
 
