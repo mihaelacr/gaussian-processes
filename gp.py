@@ -9,6 +9,8 @@ from scipy.stats import norm as normal
 # that seems to be tricky because it might depend from cov function to cov function
 # but you can use some basic optimization techniques
 
+# TODO: do something with the means of the y because we assume to mean to be 0
+
 class GaussianProcess(object):
 
   # covFunction is a object of type CovarianceFunction
@@ -17,9 +19,7 @@ class GaussianProcess(object):
     self.observedX = None
     self.observedY = None
 
-  #  does this change something in the  state of the process?
-  # no, because it does not really have a state.
-  # you only predict differently when you have all these points
+  # GPS have no state, to when you fit you do not
   def fit(self, x, y):
     if self.observedX is None:
       assert self.observedY is None
@@ -29,25 +29,22 @@ class GaussianProcess(object):
       self.observedX = np.concatenate(self.observedX, x)
       self.observedY = np.concatenate(self.observedY, y)
 
-  # TODO: do something with the means of the y because we assume to mean to be 0
-  # You have to do different types of prediction depending on the noise
-  # you admit
-
   def getDataCovMatrix(self):
     return self.covFunction.covarianceMatrix(self.observedX)
 
 
+  # TODO: cache all this in case the data does not change and you have to compute all the matrices again
+  # for a second prediction
   def predict(self, x):
     K_observed_observed = self.getDataCovMatrix()
     inv_K_observed_observed = np.linalg.inv(K_observed_observed)
     K_predict_observed = np.array([self.covFunction.apply(x, x_obs) for x_obs in self.observedX]).reshape(1, len(self.observedX))
     K_observed_predict = np.array([self.covFunction.apply(x_obs, x) for x_obs in self.observedX]).reshape(len(self.observedX), 1)
     K_predict_predict = self.covFunction.apply(x, x)
-    # Here I use the fact that I store the observed data as a numpy array so I should stick to that
+
     mean = dot([K_predict_observed, inv_K_observed_observed, self.observedY])
     mean = mean[0]
-    print "mean"
-    print mean
+
     covariance = K_predict_predict - dot([K_predict_observed, inv_K_observed_observed, K_observed_predict])
     covariance = covariance.ravel()
     covariance = covariance[0]
@@ -62,13 +59,10 @@ class CovarianceFunction(object):
   def __init__(self, hyperparmeters=None):
     self.hyperparmeters  = hyperparmeters
 
-  #  This needs to be a function that can be vectorized
-  # And should also be applied to a tuple
   def apply(self, x1, x2):
     pass
 
-  # Builds a covariance matrix from
-  # TODO: fix this because there is no such thing as numpy array of tuples
+  # Builds a covariance matrix using the covariance function and the data given (xs)
   def covarianceMatrix(self, xs):
     return np.array([self.apply(x1, x2) for x1 in xs for x2 in xs]).reshape((len(xs), len(xs)))
 
