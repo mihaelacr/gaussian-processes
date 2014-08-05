@@ -54,11 +54,13 @@ class GaussianProcess(object):
     print "covariance"
     print covariance
 
-    # TODO: see what is with the covariance, on how do you return it
-    return mean
+    return mean, covariance
 
   def predictAll(self, xs):
-    return np.array(map(self.predict, xs))
+    predictions = map(self.predict, xs)
+    means = [p[0] for p in predictions]
+    covariances = [p[1] for p in predictions]
+    return means, covariances
 
 
 class CovarianceFunction(object):
