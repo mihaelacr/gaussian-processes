@@ -22,6 +22,9 @@ def gpTest():
   # you have to subtract the mean to kind of make sure they have mean 0
   y = y - meanY
 
+  print "meanY"
+  print meanY
+
   gaussianP = gp.GaussianProcess(covFunction=gp.CubicExponential())
   gaussianP.fit(X, y)
   res =  gaussianP.predict(0.0)

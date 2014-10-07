@@ -2,12 +2,15 @@
 Use at your own risk."""
 
 import numpy as np
+import scipy
 
 # TODO: learn hyperparmeters using maximum likelihood
 # that seems to be tricky because it might depend from cov function to cov function
 # but you can use some basic optimization techniques
 
 # TODO: do something with the means of the y because we assume to mean to be 0
+
+# You need to models the means miu x and miu y not anything with
 
 class GaussianProcess(object):
 
@@ -33,10 +36,18 @@ class GaussianProcess(object):
     return self.covFunction.covarianceMatrix(self.observedX)
 
 
+
+
+
+
+
   # TODO: cache all this in case the data does not change and you have to compute all the matrices again
   # for a second prediction (the inverse anyway)
+  # This assumed that both u_x and u_y are 0
+  # here you can also return the log marginal likelihood
   def predict(self, x):
     # Take the noise into account
+    # in the book they to chelesky here
     K_observed_observed = self.getDataCovMatrix() + self.noise ** 2
     inv_K_observed_observed = np.linalg.inv(K_observed_observed)
     K_predict_observed = np.array([self.covFunction.apply(x, x_obs) for x_obs in self.observedX]).reshape(1, len(self.observedX))
@@ -45,21 +56,22 @@ class GaussianProcess(object):
 
     mean = dot([K_predict_observed, inv_K_observed_observed, self.observedY])
     mean = mean[0]
-    print "mean"
-    print mean
 
     covariance = K_predict_predict - dot([K_predict_observed, inv_K_observed_observed, K_observed_predict])
     covariance = covariance.ravel()
     covariance = covariance[0]
-    print "covariance"
-    print covariance
+
+    # print "mean"
+    # print mean
+    # print "covariance"
+    # print covariance
 
     return mean, covariance
 
   def predictAll(self, xs):
     predictions = map(self.predict, xs)
-    means = [p[0] for p in predictions]
-    covariances = [p[1] for p in predictions]
+    means = np.array([p[0] for p in predictions])
+    covariances = np.array([p[1] for p in predictions])
     return means, covariances
 
 
@@ -96,3 +108,24 @@ class CubicExponential(CovarianceFunction):
 
 def dot(mats):
   return reduce(np.dot, mats)
+
+
+# This method is also good for finding out vectors of the type K^-1 y
+# because if x = K^-1 y
+# then K x = y
+# so x is a solution of a linear system
+#  if L L^T = y
+# then we can solve L z = y
+# and then L^T x = z
+# these two systems are easier to solve because they are triangular
+# and they can be solved with substitution
+# It is important that K is positive definite and hermitian, otherwise the
+# assumptions that come with Cholesky decomposition are broken and this function
+# will raise an exception
+# This method is to be preferred over inverting matrices, because it is
+# faster and more numerically stable
+def solveSystemWithCholesky(K, y):
+  L = np.linalg.cholesky(K)
+  x = scipy.linalg.solve_triangular(L, y)
+  res = scipy.linalg.solve_triangular(L.T, x)
+  return res
