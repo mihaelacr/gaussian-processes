@@ -35,15 +35,20 @@ def gpTest():
   # the MSE
   x = np.atleast_2d(np.linspace(0, 10, 1000)).T
   # my predict still does not work with mutiple instances but doing that is not hard
-  y_pred = gaussianP.predictAll(x)
+  y_pred, sigma = gaussianP.predictAll(x)
 
   y_pred = y_pred + meanY
-  print y_pred
+
+
 
   fig = pl.figure()
   pl.plot(x, f(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
   pl.plot(X, f(X), 'r.', markersize=10, label=u'Observations')
   pl.plot(x, y_pred, 'b-', label=u'Prediction')
+  pl.fill(np.concatenate([x, x[::-1]]),
+        np.concatenate([y_pred - 1.9600 * sigma,
+                       (y_pred + 1.9600 * sigma)[::-1]]),
+        alpha=.5, fc='b', ec='None', label='95% confidence interval')
   pl.xlabel('$x$')
   pl.ylabel('$f(x)$')
   pl.ylim(-10, 20)
