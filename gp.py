@@ -35,12 +35,6 @@ class GaussianProcess(object):
   def getDataCovMatrix(self):
     return self.covFunction.covarianceMatrix(self.observedX)
 
-
-
-
-
-
-
   # TODO: cache all this in case the data does not change and you have to compute all the matrices again
   # for a second prediction (the inverse anyway)
   # This assumed that both u_x and u_y are 0
@@ -100,6 +94,7 @@ class SquaredExponential(CovarianceFunction):
     return np.exp(-(x1- x2)**2)
 
 # Stationary covariance function
+# Incorporate hyperparams
 class CubicExponential(CovarianceFunction):
 
   def apply(self, x1, x2):
@@ -126,6 +121,8 @@ def dot(mats):
 # faster and more numerically stable
 def solveSystemWithCholesky(K, y):
   L = np.linalg.cholesky(K)
-  x = scipy.linalg.solve_triangular(L, y)
-  res = scipy.linalg.solve_triangular(L.T, x)
+  x = scipy.linalg.solve_triangular(L, y, check_finite=True)
+  res = scipy.linalg.solve_triangular(L.T, x, check_finite=True)
   return res
+
+
