@@ -30,23 +30,3 @@ class CubicExponential(CovarianceFunction):
 
   def apply(self, x1, x2):
     return T.exp(- T.abs(x1- x2)**3)
-
-# let's just test that what we have done so far is the same as the numpy version
-def main():
-  exp = SquaredExponential()
-
-  xs = T.dvector('xs')
-  mat = exp.covarianceMatrix(xs)
-
-  fun = theano.function(inputs=[xs], outputs=mat, updates={})
-
-  var = np.array([1, 2])
-
-  print fun(var)
-
-
-  # make a function that just runs the theano code
-
-
-if __name__ == '__main__':
-  main()
