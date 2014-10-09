@@ -1,4 +1,6 @@
 from gptheano import *
+import theano
+from numpy import np
 
 def covarianceMatrix(xs, func):
     return np.array([func(x1, x2) for x1 in xs for x2 in xs]).reshape((len(xs), len(xs)))

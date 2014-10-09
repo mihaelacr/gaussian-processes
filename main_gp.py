@@ -2,6 +2,7 @@
 
 import numpy as np
 import gp
+import gptheano
 
 # Let's do some plotting
 from matplotlib import pyplot as pl
@@ -25,9 +26,9 @@ def gpTest():
   print "meanY"
   print meanY
 
-  gaussianP = gp.GaussianProcess(covFunction=gp.CubicExponential())
+  gaussianP = gptheano.GaussianProcess(covFunction=gptheano.SquaredExponential())
   gaussianP.fit(X, y)
-  res =  gaussianP.predict(0.0)
+  res =  gaussianP.predict(np.array([0.0]))
   print "predict"
   print res
 
