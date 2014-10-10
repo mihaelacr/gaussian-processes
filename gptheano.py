@@ -3,8 +3,6 @@ import theano.tensor.nlinalg as nl
 import theano
 import numpy as np
 
-# TODO: make a working example of this and compare it with the numpy one
-
 class GaussianProcess(object):
 
   """ Initialize the object
@@ -17,25 +15,8 @@ class GaussianProcess(object):
     self.observedY = None
     self.noise = noise
 
-
-
   def predict(self, x):
-    print "x", x
-    predictionVar = T.dvector("predictionVar")
-
-    # predict using theano code
-    mean, covariance = self._predictTheano(predictionVar)
-
-    predictFun = theano.function(inputs=[],
-      outputs=[mean, covariance],
-      givens = {
-        predictionVar: x,
-      })
-
-    mean, covariance =  predictFun()
-    print "mean", mean
-    print "covariance", covariance
-    return mean, covariance
+    return self.predictFun(x)
 
   def fit(self, x, y):
     print "fitting data"
@@ -51,16 +32,25 @@ class GaussianProcess(object):
     self.observedY = y
     self.observedVarX = T.as_tensor_variable(x, name='varX')
     self.observedVarY = T.as_tensor_variable(y, name='varY')
-    self.KObservedObserved =  self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
+    self.predictionVar = T.dvector("predictionVar")
+    self._createTheanoPredictFunction()
+
+  def _createTheanoPredictFunction(self):
+    predictionVar = T.dvector("predictionVar")
+
+    mean, covariance = self._predictTheano(predictionVar)
+
+    predictFun = theano.function(inputs=[predictionVar],
+                                 outputs=[mean, covariance])
+    self.predictFun = predictFun
+
 
   def _predictTheano(self, x):
-
     KObservedObserved =  self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
 
-    # TODO: check how this works, move to cholesky if possible
+    # TODO: check how this works, move to cholesky if possible (doesn't look like it, theano does not have solve_triangular yet)
     invKObservedObserved = nl.matrix_inverse(KObservedObserved)
 
-    # T.addbroadcast(x, 0)
     KPredictObserved = self.covFunction.applyVecMat(x, self.observedVarX)
     KObservedPredict = self.covFunction.applyVecMat(self.observedVarX, x)
     KPredictPredict  = self.covFunction.applyVecVec(x, x)
@@ -72,7 +62,15 @@ class GaussianProcess(object):
 
   # you can memoize the covariance matrix to mkae this faster (and the inverse, tht is probably the slow part)
   def predictAll(self, xs):
-    predictions = map(self.predict, xs)
+    predictionVar = T.dvector("predictionVar")
+
+    mean, covariance = self._predictTheano(predictionVar)
+
+    predictFun = theano.function(inputs=[predictionVar],
+                                 outputs=[mean, covariance])
+
+    # return mean, covariance
+    predictions = map(predictFun, xs)
     means = np.array([p[0] for p in predictions])
     covariances = np.array([p[1] for p in predictions])
     return means, covariances
@@ -122,4 +120,3 @@ def distanceSquared(x1, x2=None):
 
 def dot(mats):
   return reduce(T.dot, mats)
-
