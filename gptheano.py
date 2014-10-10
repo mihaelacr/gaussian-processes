@@ -1,7 +1,11 @@
 from theano import tensor as T
-# this requires the dev version of theano
-import theano.tensor.nlinalg as nl
 import theano
+# Use the sandbox version if theano is before and including 0.6.0
+if theano.__version__ > "0.6.0":
+  import theano.tensor.nlinalg as nl
+else:
+  import theano.sandbox.linalg as nl
+
 import numpy as np
 
 class GaussianProcess(object):
