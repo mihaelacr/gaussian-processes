@@ -1,4 +1,5 @@
 from theano import tensor as T
+# this requires the dev version of theano
 import theano.tensor.nlinalg as nl
 import theano
 import numpy as np
@@ -48,7 +49,8 @@ class GaussianProcess(object):
   def _predictTheano(self, x):
     KObservedObserved =  self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
 
-    # TODO: check how this works, move to cholesky if possible (doesn't look like it, theano does not have solve_triangular yet)
+    # TODO: Move to cholesky when possible
+    # after theano implemented solve_triangular
     invKObservedObserved = nl.matrix_inverse(KObservedObserved)
 
     KPredictObserved = self.covFunction.applyVecMat(x, self.observedVarX)
@@ -60,7 +62,6 @@ class GaussianProcess(object):
     covariance = KPredictPredict - dot([KPredictObserved, invKObservedObserved, KObservedPredict])
     return mean, covariance
 
-  # you can memoize the covariance matrix to mkae this faster (and the inverse, tht is probably the slow part)
   def predictAll(self, xs):
     predictionVar = T.dvector("predictionVar")
 
@@ -69,7 +70,6 @@ class GaussianProcess(object):
     predictFun = theano.function(inputs=[predictionVar],
                                  outputs=[mean, covariance])
 
-    # return mean, covariance
     predictions = map(predictFun, xs)
     means = np.array([p[0] for p in predictions])
     covariances = np.array([p[1] for p in predictions])
@@ -83,6 +83,7 @@ class CovarianceFunction(object):
 
   def covarianceMatrix(self, x1, x2=None):
     raise NotImplementedError("cannot call covarianceMatrix on CovarianceFunction, only on subclasses")
+
 
 """ Example covariance functions"""
 # Stationary covariance function
