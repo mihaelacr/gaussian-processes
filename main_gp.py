@@ -12,11 +12,13 @@ def gpTest():
   def f(x):
       """The function to predict."""
       return x * np.sin(x)
-  X = np.array([1., 3., 5., 6., 7., 8.])
+
+  X = np.array([[1.], [3.], [5.], [6.], [7.], [8.]])
+  # X = np.array([1., 3., 5., 6., 7., 8.])
 
   print X
   # Observations
-  y = f(X)
+  y = f(X).ravel()
   print y
   meanY = np.mean(y)
 
@@ -26,15 +28,18 @@ def gpTest():
   print "meanY"
   print meanY
 
+  # gaussianP = gp.GaussianProcess(covFunction=gp.SquaredExponential())
   gaussianP = gptheano.GaussianProcess(covFunction=gptheano.SquaredExponential())
   gaussianP.fit(X, y)
   res =  gaussianP.predict(np.array([0.0]))
+  # res =  gaussianP.predict(0.0)
   print "predict"
   print res
 
   # Plot the function, the prediction and the 95% confidence interval based on
   # the MSE
-  x = np.atleast_2d(np.linspace(0, 10, 1000)).T
+  x = np.atleast_2d(np.linspace(0, 10, 100)).T
+  print x.shape
   # my predict still does not work with mutiple instances but doing that is not hard
   y_pred, sigma = gaussianP.predictAll(x)
 

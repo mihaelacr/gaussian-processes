@@ -1,5 +1,5 @@
 from theano import tensor as T
-from theano.sandbox import linalg
+import theano.tensor.nlinalg as nl
 import theano
 import numpy as np
 
@@ -17,21 +17,18 @@ class GaussianProcess(object):
     self.observedY = None
     self.noise = noise
 
-    self.observedVarX = T.dmatrix("observedVarX")
-    self.observedVarY = T.dvector("observedVarY")
+
 
   def predict(self, x):
     print "x", x
     predictionVar = T.dvector("predictionVar")
 
     # predict using theano code
-    mean, covariance = self.predictTheano(predictionVar)
+    mean, covariance = self._predictTheano(predictionVar)
 
     predictFun = theano.function(inputs=[],
       outputs=[mean, covariance],
       givens = {
-        self.observedVarX: self.observedX,
-        self.observedVarY: self.observedY,
         predictionVar: x,
       })
 
@@ -45,44 +42,32 @@ class GaussianProcess(object):
     print "x", x.shape
     print "y", y
 
-    if self.observedX is None:
-      assert self.observedY is None
-      if len(x.shape) == 1:
-        resX = x.reshape((x.shape[0], 1))
-        print "resizing the input to be a matrix instead of a vector"
-        print "previous shape " + str(x.shape) + " current shape " + str(resX.shape)
+    if len(x.shape) == 1:
+      resX = x.reshape((x.shape[0], 1))
+      print "resizing the input to be a matrix instead of a vector"
+      print "previous shape " + str(x.shape) + " current shape " + str(resX.shape)
 
-      self.observedX = x
-      self.observedY = y
-    else:
-      # the axis might have to be specified here
-      self.observedX = np.concatenate(self.observedX, x)
-      self.observedY = np.concatenate(self.observedY, y)
+    self.observedX = x
+    self.observedY = y
+    self.observedVarX = T.as_tensor_variable(x, name='varX')
+    self.observedVarY = T.as_tensor_variable(y, name='varY')
+    self.KObservedObserved =  self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
 
-  def getDataCovMatrix(self):
-    return self.covFunction.covarianceMatrix(self.observedVarX)
+  def _predictTheano(self, x):
 
-  def predictTheano(self, x):
-    # Take the noise into account
-    # in the book they to chelesky here
-    K_observed_observed = self.getDataCovMatrix() + self.noise ** 2
+    KObservedObserved =  self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
 
     # TODO: check how this works, move to cholesky if possible
-    inv_K_observed_observed = linalg.matrix_inverse(K_observed_observed)
+    invKObservedObserved = nl.matrix_inverse(KObservedObserved)
 
-    nrDataInstances =  self.observedVarX.shape[0]
-    lenX = x.shape[0]
+    # T.addbroadcast(x, 0)
+    KPredictObserved = self.covFunction.applyVecMat(x, self.observedVarX)
+    KObservedPredict = self.covFunction.applyVecMat(self.observedVarX, x)
+    KPredictPredict  = self.covFunction.applyVecVec(x, x)
 
-    repeatedX = T.extra_ops.repeat(x, nrDataInstances, axis=0).reshape((nrDataInstances, lenX))
+    mean = dot([KPredictObserved, invKObservedObserved, self.observedVarY])
 
-    # Too much computation, try to reduce it
-    K_predict_observed = self.covFunction.covarianceMatrix(repeatedX, self.observedVarX)[:, 0]
-    K_observed_predict = self.covFunction.covarianceMatrix(self.observedVarX, repeatedX)[0, :]
-    K_predict_predict  = self.covFunction.apply(x, x) # this has to change, you can keep the apply version of the code
-
-    mean = dot([K_predict_observed, inv_K_observed_observed, self.observedVarY])
-
-    covariance = K_predict_predict - dot([K_predict_observed, inv_K_observed_observed, K_observed_predict])
+    covariance = KPredictPredict - dot([KPredictObserved, invKObservedObserved, KObservedPredict])
     return mean, covariance
 
   # you can memoize the covariance matrix to mkae this faster (and the inverse, tht is probably the slow part)
@@ -108,8 +93,11 @@ class SquaredExponential(CovarianceFunction):
   def covarianceMatrix(self, x1Mat, x2Mat=None):
     return T.exp(- distanceSquared(x1Mat, x2Mat))
 
-  def apply(self, x1, x2):
-    return T.exp(-T.sum((x1 - x2) ** 2))
+  def applyVecMat(self, vec, mat):
+    return T.exp(-T.sum((vec - mat) ** 2, axis=1))
+
+  def applyVecVec(self, vec1, vec2):
+    return T.exp(-T.sum((vec1 - vec2) ** 2))
 
 """
   Computes the square of the euclidean distance in a vectorized fashion, to avoid for loops
@@ -134,3 +122,4 @@ def distanceSquared(x1, x2=None):
 
 def dot(mats):
   return reduce(T.dot, mats)
+
