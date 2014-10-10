@@ -29,7 +29,7 @@ def gpTest():
   print meanY
 
   # gaussianP = gp.GaussianProcess(covFunction=gp.SquaredExponential())
-  gaussianP = gptheano.GaussianProcess(covFunction=gptheano.SquaredExponential())
+  gaussianP = gptheano.GaussianProcess(covFunction=gptheano.ARDSquareExponential(1))
   gaussianP.fit(X, y)
   res =  gaussianP.predict(np.array([0.0]))
   # res =  gaussianP.predict(0.0)
@@ -60,6 +60,8 @@ def gpTest():
   pl.ylim(-10, 20)
   pl.legend(loc='upper left')
   pl.show()
+
+  gaussianP.optimizehyperparams()
 
 def main():
   gpTest()
