@@ -55,11 +55,6 @@ class GaussianProcess(object):
     covariance = covariance.ravel()
     covariance = covariance[0]
 
-    # print "mean"
-    # print mean
-    # print "covariance"
-    # print covariance
-
     return mean, covariance
 
   def predictAll(self, xs):
