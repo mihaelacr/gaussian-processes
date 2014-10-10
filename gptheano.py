@@ -25,21 +25,31 @@ class GaussianProcess(object):
 
   def fit(self, x, y):
     print "fitting data"
-    print "x", x.shape
-    print "y", y
+    print "observations shape", x.shape
 
     if len(x.shape) == 1:
       resX = x.reshape((x.shape[0], 1))
       print "resizing the input to be a matrix instead of a vector"
       print "previous shape " + str(x.shape) + " current shape " + str(resX.shape)
 
+    # Observed data as numpy variables
     self.observedX = x
     self.observedY = y
+
+    # Symbolic variables that contain the data to fit into the GP
     self.observedVarX = T.as_tensor_variable(x, name='varX')
     self.observedVarY = T.as_tensor_variable(y, name='varY')
+
+    # The symbolic variable for prediction
     self.predictionVar = T.dvector("predictionVar")
     self._createTheanoPredictFunction()
 
+  """ Creates the theano function that will do the prediction and sets it
+      as a field in the GP object.
+      This is required because defining the predictTheano function in the predict
+      method would imply that theano compiles that function every time we call predict,
+      resulting in a substantial slow down of the code.
+  """
   def _createTheanoPredictFunction(self):
     predictionVar = T.dvector("predictionVar")
 
@@ -50,6 +60,7 @@ class GaussianProcess(object):
     self.predictFun = predictFun
 
 
+  """ The theano code which contains the prediction logic."""
   def _predictTheano(self, x):
     KObservedObserved =  self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
 
@@ -66,6 +77,7 @@ class GaussianProcess(object):
     covariance = KPredictPredict - dot([KPredictObserved, invKObservedObserved, KObservedPredict])
     return mean, covariance
 
+  """ Predicts multiple data instances."""
   def predictAll(self, xs):
     predictionVar = T.dvector("predictionVar")
 
