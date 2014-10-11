@@ -90,28 +90,46 @@ class GaussianProcess(object):
     covariances = np.array([p[1] for p in predictions])
     return means, covariances
 
-  # note that in the Bayesian opt paper they also add a mean M for which I did not account yet
-  # you have to integrate the mean into the code as well
-  def loglikelihood(self):
+  """ Get loglikelihood for the hyperparams which are a numpy because we have to
+  use this for scipy optimize"""
+  def loglikelihood(self, hyperparameterValues):
+    loglike = self._theanolog()
+
+    logFn = theano.function(inputs=[],
+                outputs=loglike,
+                givens=self.covFunction.makeUpdateDict(hyperparameterValues))
+
+    return logFn()
+
+  def _theanolog(self):
+    # here you have to refactor because you cannot complile the theano function all the time
     covarianceData = self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
     # determinant
-    return T.log(1./ np.sqrt(2 * np.pi)) - 1./2 * dot([self.observedVarX.T, covarianceData, self.observedVarX])
+    # and product and the correct distriubtion actually
+    loglike =  T.log(1./ np.sqrt(2 * np.pi)) - 1./2 * dot([self.observedVarY.T, covarianceData, self.observedVarY])
+    return loglike
+
+
+  def loglikilhoodgrad(self, hyperparameterValues):
+    loglike = self._theanolog()
+    gradLike = T.grad(loglike, self.covFunction.hyperparmeters)
+
+    logGradFn = theano.function(inputs=[],
+                outputs=gradLike,
+                givens=self.covFunction.makeUpdateDict(hyperparameterValues))
+
+    gradRes = logGradFn()
+    return np.array(gradRes)
+
 
   # you can actually pass the theano functions to scipy optimize, let's try that
   def optimizehyperparams(self):
-    hyperparmeters = self.covFunction.hyperparmeters
-    likelihood = self.loglikelihood()
-    print "likelihood.ndim"
-    print likelihood.ndim
-    grad = T.grad(likelihood, hyperparmeters)
-    # TODO: add the bounds that were in the paper
+    init = np.array([1., 1.])
 
-    hypers = optimize.fmin_l_bfgs_b(likelihood, hyperparmeters, grad, args=(), bounds=None, disp=0)
-
-    # but wait, is it OK if these are numbers and not numpy vars?
+    hypers = optimize.fmin_l_bfgs_b(self.loglikelihood, x0=init,
+                                     fprime=self.loglikilhoodgrad,
+                                     args=(), bounds=[(None, None), (None, None)], disp=0)
     print hypers
-
-    # set the hyperparameters to the optimized ones
 
 class CovarianceFunction(object):
 
@@ -138,23 +156,22 @@ class SquaredExponential(CovarianceFunction):
 
 class ARDSquareExponential(CovarianceFunction):
 
-  def __init__(self, inputSize, hyperparmeterValues=None):
-    self.hyperparmeterValues = hyperparmeterValues
-    if hyperparmeterValues is None:
-      self.l0Val = 1.0
-      self.lsVal = np.ones(inputSize, dtype='float64')
-      self.hyperparmeterValues = np.ones(inputSize + 1, dtype='float64')
+  def __init__(self, inputSize, hyperparameterValues=None):
+    if hyperparameterValues is None:
+      self.hyperparameterValues = np.ones(inputSize + 1, dtype='float64')
     else:
-      self.l0Val = hyperparmeterValues[0]
-      self.lsVal = hyperparmeterValues[1:]
+      self.hyperparameterValues = hyperparameterValues
 
     self.l0 = T.dscalar('l0')
     self.ls = T.dvector('ls')
     self.hyperparmeters = [self.l0, self.ls] # we need this for the gradients
 
-    self.updateDict = {
-       self.l0 : self.l0Val,
-       self.ls:  self.lsVal
+    self.updateDict = self.makeUpdateDict(self.hyperparameterValues)
+
+  def makeUpdateDict(self, hyperparameterValues):
+    return {
+       self.l0 : hyperparameterValues[0],
+       self.ls:  hyperparameterValues[1:]
        }
 
   def covarianceMatrix(self, x1Mat, x2Mat=None):
@@ -200,3 +217,21 @@ def distanceSquared(x1, x2=None, ls=None):
 
 def dot(mats):
   return reduce(T.dot, mats)
+
+
+# Maybe the optimization stuff should be outside the class
+# but you might have to do it online
+# I get more data, I have to update the hyperparameters
+# so i also should enable adding data incrementally
+
+#  I nee functions that work with numpy arrays instead of theano vars
+# so I actualy need to rnu the function, and get the ouput for it
+
+ # note that in the Bayesian opt paper they also add a mean M for which I did not account yet
+  # you have to integrate the mean into the code as well
+  # this has to be callable of hyperparams...
+  # but what i need is a theano function that runs and returns the numpy stuff.
+
+
+
+

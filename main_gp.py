@@ -61,7 +61,14 @@ def gpTest():
   pl.legend(loc='upper left')
   pl.show()
 
-  gaussianP.optimizehyperparams()
+  l = gaussianP.loglikelihood(np.array([1.0, 1.0]))
+  print l
+
+  lg = gaussianP.loglikilhoodgrad(np.array([1.0, 1.0]))
+  print lg
+
+  print gaussianP.optimizehyperparams()
+
 
 def main():
   gpTest()
