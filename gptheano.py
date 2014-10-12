@@ -47,6 +47,8 @@ class GaussianProcess(object):
     # The symbolic variable for prediction
     self.predictionVar = T.dvector("predictionVar")
     self._createTheanoPredictFunction()
+    self._createTheanoLogFunction()
+    self._createTheanoLogGradFunction()
 
   """ Creates the theano function that will do the prediction and sets it
       as a field in the GP object.
@@ -64,7 +66,6 @@ class GaussianProcess(object):
                                  givens = self.covFunction.updateDict)
 
     self.predictFun = predictFun
-
 
   """ The theano code which contains the prediction logic."""
   def _predictTheano(self, x):
@@ -91,50 +92,57 @@ class GaussianProcess(object):
     covariances = np.array([p[1] for p in predictions])
     return means, covariances
 
+  def _theanoLog(self, hyperparamsVar):
+    self.covFunction.setHypers(hyperparamsVar)
+    return self._theanolog()
+
+  def _createTheanoLogFunction(self):
+    loglike = self._theanolog()
+    logFun = theano.function(inputs=self.covFunction.hyperparameters,
+                                 outputs=[loglike])
+
+    self.logFun = logFun
+
 
   """ Get loglikelihood for the hyperparams which are a numpy because we have to
   use this for scipy optimize"""
   def loglikelihood(self, hyperparameterValues):
-    loglike = self._theanolog()
-
-    logFn = theano.function(inputs=[],
-                outputs=loglike,
-                givens=self.covFunction.makeUpdateDict(hyperparameterValues))
-
-    return logFn()
+    hyperList = self.covFunction.makeHyperList(hyperparameterValues)
+    # TODO: sort this out
+    return self.logFun(hyperList[0], hyperList[1])
 
   def _theanolog(self):
-    print "in theano log"
     covarianceMatrix = self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
     invKObservedObserved = nl.matrix_inverse(covarianceMatrix)
 
-    loglike =  T.log(1./ T.sqrt(2 * np.pi * nl.det(covarianceMatrix))) - 1./2 * dot([self.observedVarY.T, invKObservedObserved, self.observedVarY])
+    loglike = T.log(1./ T.sqrt(2 * np.pi * nl.det(covarianceMatrix))) - 1./2 * dot([self.observedVarY.T, invKObservedObserved, self.observedVarY])
     return loglike
 
+  def _createTheanoLogGradFunction(self):
+    loglike = self._theanolog()
+    gradLike = T.grad(loglike, self.covFunction.hyperparameters)
+
+    logGradFun = theano.function(inputs=self.covFunction.hyperparameters,
+                              outputs=gradLike)
+
+    self.logGradFun = logGradFun
 
   def loglikilhoodgrad(self, hyperparameterValues):
-    loglike = self._theanolog()
-    gradLike = T.grad(loglike, self.covFunction.hyperparmeters)
-
-    logGradFn = theano.function(inputs=[],
-                outputs=gradLike,
-                givens=self.covFunction.makeUpdateDict(hyperparameterValues))
-
-    gradRes = logGradFn()
-    return np.array(gradRes)
-
+    hyperList = self.covFunction.makeHyperList(hyperparameterValues)
+    # TODO: sort this out
+    return np.array(self.logGradFun(hyperList[0], hyperList[1]))
 
   def optimizehyperparams(self):
     init = self.covFunction.hyperparameterValues
 
     b = [(-10, 10), (-10, 10)] # TODO: make this proper
 
-
     hypers = optimize.fmin_l_bfgs_b(self.loglikelihood, x0=init,
                                      fprime=self.loglikilhoodgrad,
                                      args=(), bounds=b, disp=0)
     print hypers
     self.hyperparameterValues = hypers
+
 
 class CovarianceFunction(object):
 
@@ -147,7 +155,7 @@ class CovarianceFunction(object):
 class SquaredExponential(CovarianceFunction):
 
   def __init__(self):
-    self.hyperparmeters = []
+    self.hyperparameters = []
     self.updateDict = {}
 
   def makeUpdateDict(self, hyperparameterValues):
@@ -162,6 +170,7 @@ class SquaredExponential(CovarianceFunction):
   def applyVecVec(self, vec1, vec2):
     return T.exp(-T.sum((vec1 - vec2) ** 2))
 
+# Stationary covariance function
 class ARDSquareExponential(CovarianceFunction):
 
   def __init__(self, inputSize, hyperparameterValues=None):
@@ -172,15 +181,19 @@ class ARDSquareExponential(CovarianceFunction):
 
     self.l0 = T.dscalar('l0')
     self.ls = T.dvector('ls')
-    self.hyperparmeters = [self.l0, self.ls] # we need this for the gradients
+    self.hyperparameters = [self.l0, self.ls] # we need this for the gradients
 
     self.updateDict = self.makeUpdateDict(self.hyperparameterValues)
+
 
   def makeUpdateDict(self, hyperparameterValues):
     return {
        self.l0 : hyperparameterValues[0],
        self.ls:  hyperparameterValues[1:]
        }
+
+  def makeHyperList(self, hyperparamsVar):
+    return [hyperparamsVar[0], hyperparamsVar[1:]]
 
   def covarianceMatrix(self, x1Mat, x2Mat=None):
     return self.l0 * T.exp(- distanceSquared(x1Mat, x2Mat, self.ls))
