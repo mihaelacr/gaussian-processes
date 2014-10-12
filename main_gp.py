@@ -67,7 +67,36 @@ def gpTest():
   lg = gaussianP.loglikilhoodgrad(np.array([1.0, 1.0]))
   print lg
 
-  print gaussianP.optimizehyperparams()
+  # THIS WILL CHANGE THE HYPERPARAMETERS
+  gaussianP.optimizehyperparams()
+
+
+  # Do the prediction again after we have fitted the hyperparameters to
+  # maximize likelihood
+  x = np.atleast_2d(np.linspace(0, 10, 100)).T
+  print x.shape
+  # my predict still does not work with mutiple instances but doing that is not hard
+  y_pred, sigma = gaussianP.predictAll(x)
+
+  print sigma
+
+  y_pred = y_pred + meanY
+
+
+
+  fig = pl.figure()
+  pl.plot(x, f(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
+  pl.plot(X, f(X), 'r.', markersize=10, label=u'Observations')
+  pl.plot(x, y_pred, 'b-', label=u'Prediction')
+  pl.fill(np.concatenate([x, x[::-1]]),
+        np.concatenate([y_pred - 1.9600 * sigma,
+                       (y_pred + 1.9600 * sigma)[::-1]]),
+        alpha=.5, fc='b', ec='None', label='95% confidence interval')
+  pl.xlabel('$x$')
+  pl.ylabel('$f(x)$')
+  pl.ylim(-10, 20)
+  pl.legend(loc='upper left')
+  pl.show()
 
 
 def main():
