@@ -25,8 +25,10 @@ class GaussianProcess(object):
     self.noise = noise
 
   def predict(self, x):
-    return self.predictFun(x)
+    hyper = self.covFunction.hyperparameterValues
+    return self.covFunction.callFunctiononHyperparamesWithOtherParamFirst(self.predictFun, x, hyper)
 
+  # TODO: work with being able to add data incrementally
   def fit(self, x, y):
     print "fitting data"
     print "observations shape", x.shape
@@ -61,9 +63,9 @@ class GaussianProcess(object):
 
     mean, covariance = self._predictTheano(predictionVar)
 
-    predictFun = theano.function(inputs=[predictionVar],
-                                 outputs=[mean, covariance],
-                                 givens = self.covFunction.updateDict)
+    inputs = [predictionVar] + self.covFunction.hyperparameters
+    predictFun = theano.function(inputs=inputs,
+                                 outputs=[mean, covariance])
 
     self.predictFun = predictFun
 
@@ -87,29 +89,10 @@ class GaussianProcess(object):
 
   """ Predicts multiple data instances."""
   def predictAll(self, xs):
-    predictions = map(self.predictFun, xs)
+    predictions = map(self.predict, xs)
     means = np.array([p[0] for p in predictions])
     covariances = np.array([p[1] for p in predictions])
     return means, covariances
-
-  def _theanoLog(self, hyperparamsVar):
-    self.covFunction.setHypers(hyperparamsVar)
-    return self._theanolog()
-
-  def _createTheanoLogFunction(self):
-    loglike = self._theanolog()
-    logFun = theano.function(inputs=self.covFunction.hyperparameters,
-                                 outputs=[loglike])
-
-    self.logFun = logFun
-
-
-  """ Get loglikelihood for the hyperparams which are a numpy because we have to
-  use this for scipy optimize"""
-  def loglikelihood(self, hyperparameterValues):
-    hyperList = self.covFunction.makeHyperList(hyperparameterValues)
-    # TODO: sort this out
-    return self.logFun(hyperList[0], hyperList[1])
 
   def _theanolog(self):
     covarianceMatrix = self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
@@ -118,30 +101,42 @@ class GaussianProcess(object):
     loglike = T.log(1./ T.sqrt(2 * np.pi * nl.det(covarianceMatrix))) - 1./2 * dot([self.observedVarY.T, invKObservedObserved, self.observedVarY])
     return loglike
 
+  def _createTheanoLogFunction(self):
+    loglike = self._theanolog()
+    logFun = theano.function(inputs=self.covFunction.hyperparameters,
+                                 outputs=[loglike])
+
+    self.logFun = logFun
+
   def _createTheanoLogGradFunction(self):
     loglike = self._theanolog()
     gradLike = T.grad(loglike, self.covFunction.hyperparameters)
 
     logGradFun = theano.function(inputs=self.covFunction.hyperparameters,
-                              outputs=gradLike)
+                                 outputs=gradLike)
 
     self.logGradFun = logGradFun
 
+  """ Get loglikelihood for the hyperparams which are a numpy because we have to
+  use this for scipy optimize"""
+  def loglikelihood(self, hyperparameterValues):
+    return self.covFunction.callFunctiononHyperparames(self.logFun, hyperparameterValues)
+
   def loglikilhoodgrad(self, hyperparameterValues):
-    hyperList = self.covFunction.makeHyperList(hyperparameterValues)
-    # TODO: sort this out
-    return np.array(self.logGradFun(hyperList[0], hyperList[1]))
+    return np.array(self.covFunction.callFunctiononHyperparames(self.logGradFun, hyperparameterValues))
 
   def optimizehyperparams(self):
     init = self.covFunction.hyperparameterValues
 
-    b = [(-10, 10), (-10, 10)] # TODO: make this proper
+    b = [(-1000, 1000), (-1000, 1000)] # TODO: make this proper
 
     hypers = optimize.fmin_l_bfgs_b(self.loglikelihood, x0=init,
                                      fprime=self.loglikilhoodgrad,
                                      args=(), bounds=b, disp=0)
+    hypers = hypers[0] # optimize also returns some data about the procedure, nore that
     print hypers
-    self.hyperparameterValues = hypers
+    self.covFunction.hyperparameterValues = hypers
+    return hypers
 
 
 class CovarianceFunction(object):
@@ -157,9 +152,6 @@ class SquaredExponential(CovarianceFunction):
   def __init__(self):
     self.hyperparameters = []
     self.updateDict = {}
-
-  def makeUpdateDict(self, hyperparameterValues):
-    return {}
 
   def covarianceMatrix(self, x1Mat, x2Mat=None):
     return T.exp(- distanceSquared(x1Mat, x2Mat))
@@ -183,17 +175,12 @@ class ARDSquareExponential(CovarianceFunction):
     self.ls = T.dvector('ls')
     self.hyperparameters = [self.l0, self.ls] # we need this for the gradients
 
-    self.updateDict = self.makeUpdateDict(self.hyperparameterValues)
 
+  def callFunctiononHyperparames(self, func, hyperparameterValues):
+    return func(hyperparameterValues[0], hyperparameterValues[1:])
 
-  def makeUpdateDict(self, hyperparameterValues):
-    return {
-       self.l0 : hyperparameterValues[0],
-       self.ls:  hyperparameterValues[1:]
-       }
-
-  def makeHyperList(self, hyperparamsVar):
-    return [hyperparamsVar[0], hyperparamsVar[1:]]
+  def callFunctiononHyperparamesWithOtherParamFirst(self, func, first, hyperparameterValues):
+    return func(first, hyperparameterValues[0], hyperparameterValues[1:])
 
   def covarianceMatrix(self, x1Mat, x2Mat=None):
     return self.l0 * T.exp(- distanceSquared(x1Mat, x2Mat, self.ls))
