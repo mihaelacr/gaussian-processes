@@ -83,12 +83,14 @@ class GaussianProcess(object):
     covariance = KPredictPredict - dot([KPredictObserved, invKObservedObserved, KObservedPredict])
     return mean, covariance
 
+
   """ Predicts multiple data instances."""
   def predictAll(self, xs):
     predictions = map(self.predictFun, xs)
     means = np.array([p[0] for p in predictions])
     covariances = np.array([p[1] for p in predictions])
     return means, covariances
+
 
   """ Get loglikelihood for the hyperparams which are a numpy because we have to
   use this for scipy optimize"""
@@ -102,11 +104,11 @@ class GaussianProcess(object):
     return logFn()
 
   def _theanolog(self):
-    # here you have to refactor because you cannot complile the theano function all the time
-    covarianceData = self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
-    # determinant
-    # and product and the correct distriubtion actually
-    loglike =  T.log(1./ np.sqrt(2 * np.pi)) - 1./2 * dot([self.observedVarY.T, covarianceData, self.observedVarY])
+    print "in theano log"
+    covarianceMatrix = self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
+    invKObservedObserved = nl.matrix_inverse(covarianceMatrix)
+
+    loglike =  T.log(1./ T.sqrt(2 * np.pi * nl.det(covarianceMatrix))) - 1./2 * dot([self.observedVarY.T, invKObservedObserved, self.observedVarY])
     return loglike
 
 
@@ -122,14 +124,17 @@ class GaussianProcess(object):
     return np.array(gradRes)
 
 
-  # you can actually pass the theano functions to scipy optimize, let's try that
   def optimizehyperparams(self):
-    init = np.array([1., 1.])
+    init = self.covFunction.hyperparameterValues
+
+    b = [(-10, 10), (-10, 10)] # TODO: make this proper
+
 
     hypers = optimize.fmin_l_bfgs_b(self.loglikelihood, x0=init,
                                      fprime=self.loglikilhoodgrad,
-                                     args=(), bounds=[(None, None), (None, None)], disp=0)
+                                     args=(), bounds=b, disp=0)
     print hypers
+    self.hyperparameterValues = hypers
 
 class CovarianceFunction(object):
 
@@ -144,6 +149,9 @@ class SquaredExponential(CovarianceFunction):
   def __init__(self):
     self.hyperparmeters = []
     self.updateDict = {}
+
+  def makeUpdateDict(self, hyperparameterValues):
+    return {}
 
   def covarianceMatrix(self, x1Mat, x2Mat=None):
     return T.exp(- distanceSquared(x1Mat, x2Mat))
@@ -217,21 +225,4 @@ def distanceSquared(x1, x2=None, ls=None):
 
 def dot(mats):
   return reduce(T.dot, mats)
-
-
-# Maybe the optimization stuff should be outside the class
-# but you might have to do it online
-# I get more data, I have to update the hyperparameters
-# so i also should enable adding data incrementally
-
-#  I nee functions that work with numpy arrays instead of theano vars
-# so I actualy need to rnu the function, and get the ouput for it
-
- # note that in the Bayesian opt paper they also add a mean M for which I did not account yet
-  # you have to integrate the mean into the code as well
-  # this has to be callable of hyperparams...
-  # but what i need is a theano function that runs and returns the numpy stuff.
-
-
-
 
