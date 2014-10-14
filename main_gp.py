@@ -29,7 +29,7 @@ def gpTest():
   print meanY
 
   # gaussianP = gp.GaussianProcess(covFunction=gp.SquaredExponential())
-  gaussianP = gptheano.GaussianProcess(covFunction=gptheano.ARDSquareExponential(1))
+  gaussianP = gptheano.GaussianProcess(covFunction=gptheano.ARDSquareExponential(1), noise=0.01)
   gaussianP.fit(X, y)
   res =  gaussianP.predict(np.array([0.0]))
   # res =  gaussianP.predict(0.0)
@@ -61,27 +61,26 @@ def gpTest():
   pl.legend(loc='upper left')
   pl.show()
 
-  l = gaussianP.loglikelihood(np.array([1.0, 1.0]))
+  l = gaussianP._loglikelihood(np.array([0.0, 0.1, 1.0, 1.0]))
+  print "likelihood"
   print l
+  print type(l)
 
-  lg = gaussianP.loglikilhoodgrad(np.array([1.0, 1.0]))
+  lg = gaussianP._loglikilhoodgrad(np.array([0.0, 0.1, 1.0, 1.0]))
+  print "log likelihood grad"
   print lg
+  print type(lg)
 
 
-  # # THIS WILL CHANGE THE HYPERPARAMETERS
-  # gaussianP.optimizehyperparams()
+
+  # THIS WILL CHANGE THE HYPERPARAMETERS
+  print "resulting"
+  print gaussianP.optimizehyperparams()
+
   XNew = np.array([[0.], [2.], [4.], [9.]])
 
    # Observations
   yNew = f(XNew).ravel()
-  print yNew
-  meanYNew = np.mean(yNew)
-
-  # you have to subtract the mean to kind of make sure they have mean 0
-  # yNew = yNew - meanYNew
-
-  print "meanYNew"
-  print meanYNew
 
   # gaussianP = gp.GaussianProcess(covFunction=gp.SquaredExponential())
   gaussianP.fit(XNew, yNew)

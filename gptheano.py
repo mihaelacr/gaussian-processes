@@ -18,16 +18,20 @@ class GaussianProcess(object):
           note that noise is also a hyperparmeter which can be optimized using max likelihood
     covFunction an object of type CovarianceFunction
   """
-  def __init__(self, covFunction, mean=0.0, noise=0.0):
+  def __init__(self, covFunction, mean=0.0, noise=0.01):
     self.covFunction = covFunction
     self.mean = mean
     self.observedX = None
     self.observedY = None
     self.noise = noise
 
+    self.meanVar = T.dscalar('meanVar')
+    self.noiseVar = T.dscalar('noiseVar')
+
+    self.hyperparameters = [self.meanVar, self.noiseVar, self.covFunction.hyperparameters]
+
   def predict(self, x):
-    hyper = self.covFunction.hyperparameterValues
-    return self.covFunction.callFunctiononHyperparamesWithOtherParamFirst(self.predictFun, x, hyper)
+    return self.predictFun(x, self.covFunction.hyperparameterValues)
 
   # TODO: work with being able to add data incrementally
   def fit(self, x, y):
@@ -69,7 +73,7 @@ class GaussianProcess(object):
 
     mean, covariance = self._predictTheano(predictionVar)
 
-    inputs = [predictionVar] + self.covFunction.hyperparameters
+    inputs = [predictionVar, self.covFunction.hyperparameters]
     predictFun = theano.function(inputs=inputs,
                                  outputs=[mean, covariance])
 
@@ -77,7 +81,7 @@ class GaussianProcess(object):
 
   """ The theano code which contains the prediction logic."""
   def _predictTheano(self, x):
-    KObservedObserved =  self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
+    KObservedObserved = self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
 
     # TODO: Move to cholesky when possible
     # after theano implemented solve_triangular
@@ -87,6 +91,8 @@ class GaussianProcess(object):
     KObservedPredict = self.covFunction.applyVecMat(self.observedVarX, x)
     KPredictPredict  = self.covFunction.applyVecVec(x, x)
 
+    # Use the mean constant not the mean var because this is not related to the optimization
+    # so you use the hyperparameter values anyway for prediction
     mean = self.mean + dot([KPredictObserved, invKObservedObserved, self.observedVarY - self.mean])
 
     covariance = KPredictPredict - dot([KPredictObserved, invKObservedObserved, KObservedPredict])
@@ -100,51 +106,72 @@ class GaussianProcess(object):
     covariances = np.array([p[1] for p in predictions])
     return means, covariances
 
+  """ Only required for hyperparmeter optimization"""
   def _theanolog(self):
-    covarianceMatrix = self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
+    covarianceMatrix = self.covFunction.covarianceMatrix(self.observedVarX) + self.noiseVar ** 2
     invKObservedObserved = nl.matrix_inverse(covarianceMatrix)
 
-    yVarMean = self.observedVarY - self.mean
+    yVarMean = self.observedVarY - self.meanVar
     loglike = T.log(1./ T.sqrt(2 * np.pi * nl.det(covarianceMatrix))) - 1./2 * dot([yVarMean.T, invKObservedObserved, yVarMean])
     return loglike
 
+  """ Only required for hyperparmeter optimization"""
   def _createTheanoLogFunction(self):
     loglike = self._theanolog()
-    logFun = theano.function(inputs=self.covFunction.hyperparameters,
+    logFun = theano.function(inputs=self.hyperparameters,
                                  outputs=[loglike])
 
     self.logFun = logFun
 
+  """ Only required for hyperparmeter optimization"""
   def _createTheanoLogGradFunction(self):
     loglike = self._theanolog()
-    gradLike = T.grad(loglike, self.covFunction.hyperparameters)
+    gradLike = T.grad(loglike, self.hyperparameters)
 
-    logGradFun = theano.function(inputs=self.covFunction.hyperparameters,
+    logGradFun = theano.function(inputs=self.hyperparameters,
                                  outputs=gradLike)
 
     self.logGradFun = logGradFun
 
-  """ Get loglikelihood for the hyperparams which are a numpy because we have to
+  """ Only required for hyperparmeter optimization.
+     Get loglikelihood for the hyperparams which are a numpy because we have to
   use this for scipy optimize"""
-  def loglikelihood(self, hyperparameterValues):
-    return self.covFunction.callFunctiononHyperparames(self.logFun, hyperparameterValues)
+  def _loglikelihood(self, hyperparameters):
+    mean = hyperparameters[0]
+    noise = hyperparameters[1]
+    covHyperparams = hyperparameters[2:]
+    return self.logFun(mean, noise, covHyperparams)[0]
 
-  def loglikilhoodgrad(self, hyperparameterValues):
-    return np.array(self.covFunction.callFunctiononHyperparames(self.logGradFun, hyperparameterValues))
+  def _loglikilhoodgrad(self, hyperparameters):
+    mean = hyperparameters[0]
+    noise = hyperparameters[1]
+    covHyperparams = hyperparameters[2:]
+    ret = self.logGradFun(mean, noise, covHyperparams)
+    res = np.zeros(len(self.covFunction.hyperparameterValues) + 2, dtype='float')
+    res[0] = ret[0]
+    res[1] = ret[1]
+    res[2: ] = ret[2]
+    return res
 
   # here you also have to optimize the hypers from the mean function
   # you  might just have to admit it will just be a constant to not overcomplicate things
   def optimizehyperparams(self):
-    init = self.covFunction.hyperparameterValues
+    init = np.zeros(len(self.covFunction.hyperparameterValues) + 2, dtype='float')
+    init[0] = self.mean
+    init[1] = self.noise
+    init[2: ] = self.covFunction.hyperparameterValues
 
-    b = [(-1000, 1000), (-1000, 1000)] # TODO: make this proper
+    b = [(-10, 10), (0.0, 1.0)]  + [(-200, 200)] * (len(init) - 2)
 
-    hypers = optimize.fmin_l_bfgs_b(self.loglikelihood, x0=init,
-                                     fprime=self.loglikilhoodgrad,
+    hypers = optimize.fmin_l_bfgs_b(self._loglikelihood, x0=init,
+                                     fprime=self._loglikilhoodgrad,
                                      args=(), bounds=b, disp=0)
-    hypers = hypers[0] # optimize also returns some data about the procedure, nore that
-    print hypers
-    self.covFunction.hyperparameterValues = hypers
+    hypers = hypers[0] # optimize also returns some data about the procedure, ignore that
+
+    # Now set the mean the the optimized hyperparameters
+    self.mean = hypers[0]
+    self.noise = hypers[1]
+    self.covFunction.hyperparameterValues = hypers[2:]
     return hypers
 
 
@@ -157,10 +184,6 @@ class CovarianceFunction(object):
 """ Example covariance functions"""
 # Stationary covariance function
 class SquaredExponential(CovarianceFunction):
-
-  def __init__(self):
-    self.hyperparameters = []
-    self.updateDict = {}
 
   def covarianceMatrix(self, x1Mat, x2Mat=None):
     return T.exp(- distanceSquared(x1Mat, x2Mat))
@@ -180,31 +203,29 @@ class ARDSquareExponential(CovarianceFunction):
     else:
       self.hyperparameterValues = hyperparameterValues
 
-    self.l0 = T.dscalar('l0')
-    self.ls = T.dvector('ls')
-    self.hyperparameters = [self.l0, self.ls] # we need this for the gradients
+    self.hyperparameters = T.dvector('ardhypers')
 
-
-  def callFunctiononHyperparames(self, func, hyperparameterValues):
-    return func(hyperparameterValues[0], hyperparameterValues[1:])
-
-  def callFunctiononHyperparamesWithOtherParamFirst(self, func, first, hyperparameterValues):
-    return func(first, hyperparameterValues[0], hyperparameterValues[1:])
 
   def covarianceMatrix(self, x1Mat, x2Mat=None):
-    return self.l0 * T.exp(- distanceSquared(x1Mat, x2Mat, self.ls))
+    l0 = self.hyperparameters[0]
+    ls = self.hyperparameters[1:]
+    return l0 * T.exp(- distanceSquared(x1Mat, x2Mat, ls))
 
   def applyVecMat(self, vec, mat):
-    vec = vec / self.ls
-    mat = mat / self.ls # TODO: ensure this gets broadcasted properly
+    l0 = self.hyperparameters[0]
+    ls = self.hyperparameters[1:]
+    vec = vec / ls
+    mat = mat / ls # TODO: ensure this gets broadcasted properly
 
-    return self.l0 * T.exp(-T.sum((vec - mat) ** 2, axis=1))
+    return l0 * T.exp(-T.sum((vec - mat) ** 2, axis=1))
 
   def applyVecVec(self, vec1, vec2):
-    vec1 = vec1 / self.ls
-    vec2 = vec2 / self.ls
+    l0 = self.hyperparameters[0]
+    ls = self.hyperparameters[1:]
+    vec1 = vec1 / ls
+    vec2 = vec2 / ls
 
-    return self.l0 * T.exp(-T.sum((vec1 - vec2) ** 2))
+    return l0 * T.exp(-T.sum((vec1 - vec2) ** 2))
 
 
 
