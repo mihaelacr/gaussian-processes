@@ -40,12 +40,17 @@ class GaussianProcess(object):
       print "previous shape " + str(x.shape) + " current shape " + str(resX.shape)
 
     # Observed data as numpy variables
-    self.observedX = x
-    self.observedY = y
+    if self.observedX is None:
+      assert self.observedY is None
+      self.observedX = x
+      self.observedY = y
+    else:
+      self.observedX = np.concatenate([self.observedX, x])
+      self.observedY = np.concatenate([self.observedY, y])
 
     # Symbolic variables that contain the data to fit into the GP
-    self.observedVarX = T.as_tensor_variable(x, name='varX')
-    self.observedVarY = T.as_tensor_variable(y, name='varY')
+    self.observedVarX = T.as_tensor_variable(self.observedX, name='varX')
+    self.observedVarY = T.as_tensor_variable(self.observedY, name='varY')
 
     # The symbolic variable for prediction
     self.predictionVar = T.dvector("predictionVar")
