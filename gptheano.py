@@ -18,8 +18,9 @@ class GaussianProcess(object):
           note that noise is also a hyperparmeter which can be optimized using max likelihood
     covFunction an object of type CovarianceFunction
   """
-  def __init__(self, covFunction, noise=0.0):
+  def __init__(self, covFunction, mean=0.0, noise=0.0):
     self.covFunction = covFunction
+    self.mean = mean
     self.observedX = None
     self.observedY = None
     self.noise = noise
@@ -81,7 +82,7 @@ class GaussianProcess(object):
     KObservedPredict = self.covFunction.applyVecMat(self.observedVarX, x)
     KPredictPredict  = self.covFunction.applyVecVec(x, x)
 
-    mean = dot([KPredictObserved, invKObservedObserved, self.observedVarY])
+    mean = self.mean + dot([KPredictObserved, invKObservedObserved, self.observedVarY - self.mean])
 
     covariance = KPredictPredict - dot([KPredictObserved, invKObservedObserved, KObservedPredict])
     return mean, covariance
@@ -98,7 +99,8 @@ class GaussianProcess(object):
     covarianceMatrix = self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
     invKObservedObserved = nl.matrix_inverse(covarianceMatrix)
 
-    loglike = T.log(1./ T.sqrt(2 * np.pi * nl.det(covarianceMatrix))) - 1./2 * dot([self.observedVarY.T, invKObservedObserved, self.observedVarY])
+    yVarMean = self.observedVarY - self.mean
+    loglike = T.log(1./ T.sqrt(2 * np.pi * nl.det(covarianceMatrix))) - 1./2 * dot([yVarMean.T, invKObservedObserved, yVarMean])
     return loglike
 
   def _createTheanoLogFunction(self):
