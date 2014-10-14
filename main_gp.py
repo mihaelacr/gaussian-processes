@@ -23,7 +23,7 @@ def gpTest():
   meanY = np.mean(y)
 
   # you have to subtract the mean to kind of make sure they have mean 0
-  y = y - meanY
+  # y = y - meanY
 
   print "meanY"
   print meanY
@@ -43,7 +43,7 @@ def gpTest():
   # my predict still does not work with mutiple instances but doing that is not hard
   y_pred, sigma = gaussianP.predictAll(x)
 
-  y_pred = y_pred + meanY
+  # y_pred = y_pred + meanY
 
 
 
@@ -67,22 +67,34 @@ def gpTest():
   lg = gaussianP.loglikilhoodgrad(np.array([1.0, 1.0]))
   print lg
 
-  # THIS WILL CHANGE THE HYPERPARAMETERS
-  gaussianP.optimizehyperparams()
 
+  # # THIS WILL CHANGE THE HYPERPARAMETERS
+  # gaussianP.optimizehyperparams()
+  XNew = np.array([[0.], [2.], [4.], [9.]])
 
-  # Do the prediction again after we have fitted the hyperparameters to
-  # maximize likelihood
+   # Observations
+  yNew = f(XNew).ravel()
+  print yNew
+  meanYNew = np.mean(yNew)
+
+  # you have to subtract the mean to kind of make sure they have mean 0
+  # yNew = yNew - meanYNew
+
+  print "meanYNew"
+  print meanYNew
+
+  # gaussianP = gp.GaussianProcess(covFunction=gp.SquaredExponential())
+  gaussianP.fit(XNew, yNew)
+
+  res =  gaussianP.predict(np.array([0.0]))
+  print "res", res
+
   x = np.atleast_2d(np.linspace(0, 10, 100)).T
   print x.shape
   # my predict still does not work with mutiple instances but doing that is not hard
   y_pred, sigma = gaussianP.predictAll(x)
 
-  print sigma
-
-  y_pred = y_pred + meanY
-
-
+  X = np.concatenate([X, XNew])
 
   fig = pl.figure()
   pl.plot(x, f(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
@@ -98,6 +110,14 @@ def gpTest():
   pl.legend(loc='upper left')
   pl.show()
 
+  # # Do the prediction again after we have fitted the hyperparameters to
+  # # maximize likelihood
+  # x = np.atleast_2d(np.linspace(0, 10, 100)).T
+  # print x.shape
+  # # my predict still does not work with mutiple instances but doing that is not hard
+  # y_pred, sigma = gaussianP.predictAll(x)
+
+  # print sigma
 
 def main():
   gpTest()

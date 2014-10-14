@@ -132,6 +132,8 @@ class GaussianProcess(object):
   def loglikilhoodgrad(self, hyperparameterValues):
     return np.array(self.covFunction.callFunctiononHyperparames(self.logGradFun, hyperparameterValues))
 
+  # here you also have to optimize the hypers from the mean function
+  # you  might just have to admit it will just be a constant to not overcomplicate things
   def optimizehyperparams(self):
     init = self.covFunction.hyperparameterValues
 
