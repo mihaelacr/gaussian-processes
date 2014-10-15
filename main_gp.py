@@ -55,7 +55,8 @@ def gpTest():
 
   # THIS WILL CHANGE THE HYPERPARAMETERS
   print "optimizing"
-  print gaussianP.optimizehyperparams()
+  res = gaussianP.optimizehyperparams()
+  print "returned hyperparams", res
 
   XNew = np.array([[0.], [2.], [4.], [9.]])
   yNew = f(XNew).ravel()
@@ -68,8 +69,12 @@ def gpTest():
   X = np.concatenate([X, XNew])
   plot(x, X, f, y_pred, sigma)
 
+  res =  gaussianP.predict(np.array([0.0]))
+  print "predict 0.0 after first optimization and second fit", res
+
   print "optimizing"
-  print gaussianP.optimizehyperparams()
+  res = gaussianP.optimizehyperparams()
+  print "returned hyperparams", res
 
   res =  gaussianP.predict(np.array([0.0]))
   print "predict 0.0 after second optimization and second fit", res
