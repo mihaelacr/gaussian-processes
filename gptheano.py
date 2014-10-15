@@ -3,8 +3,10 @@ import theano
 # Use the sandbox version if theano is before and including 0.6.0
 if theano.__version__ > "0.6.0":
   import theano.tensor.nlinalg as nl
+  import theano.tensor.slinalg as sl
 else:
   import theano.sandbox.linalg as nl
+  import theano.sandbox.slinalg as sl
 
 import numpy as np
 from scipy import optimize
@@ -115,6 +117,7 @@ class GaussianProcess(object):
     invKObservedObserved = nl.matrix_inverse(covarianceMatrix)
 
     yVarMean = self.observedVarY - self.meanVar
+
     loglike = T.log(1./ T.sqrt(2 * np.pi * nl.det(covarianceMatrix))) - 1./2 * dot([yVarMean.T, invKObservedObserved, yVarMean])
     return loglike
 
@@ -164,11 +167,16 @@ class GaussianProcess(object):
     init[1] = self.noise
     init[2: ] = self.covFunction.hyperparameterValues
 
-    b = [(-10, 10), (0.0, 1.0)]  + [(-150, 150)] * (len(init) - 2)
+    print "init", init
+
+    b = [(-10, 10), (-10, 10)]  + [(-100, 100)] * (len(init) - 2)
 
     hypers = optimize.fmin_l_bfgs_b(self._loglikelihood, x0=init,
                                      fprime=self._loglikilhoodgrad,
-                                     args=(), bounds=b, disp=0)
+                                     bounds=b,
+                                     args=(), disp=0, maxiter=50)
+
+    print "optimization status", hypers
     hypers = hypers[0] # optimize also returns some data about the procedure, ignore that
 
     # Now set the mean the the optimized hyperparameters
@@ -260,3 +268,7 @@ def distanceSquared(x1, x2=None, ls=None):
 def dot(mats):
   return reduce(T.dot, mats)
 
+def choleskySolver(a, res):
+  l = sl.cholesky(a)
+  intermiediate = sl.solve(l, res)
+  return sl.solve(l.T, intermiediate)
