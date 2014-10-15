@@ -81,7 +81,8 @@ class GaussianProcess(object):
 
   """ The theano code which contains the prediction logic."""
   def _predictTheano(self, x):
-    KObservedObserved = self.covFunction.covarianceMatrix(self.observedVarX) + self.noise ** 2
+    KObservedObserved = self.covFunction.covarianceMatrix(self.observedVarX)
+    KObservedObserved += self.noise ** 2 * T.identity_like(KObservedObserved)
 
     # TODO: Move to cholesky when possible
     # after theano implemented solve_triangular
@@ -108,7 +109,9 @@ class GaussianProcess(object):
 
   """ Only required for hyperparmeter optimization"""
   def _theanolog(self):
-    covarianceMatrix = self.covFunction.covarianceMatrix(self.observedVarX) + self.noiseVar ** 2
+    covarianceMatrix = self.covFunction.covarianceMatrix(self.observedVarX)
+    covarianceMatrix += self.noiseVar ** 2 * T.identity_like(covarianceMatrix)
+
     invKObservedObserved = nl.matrix_inverse(covarianceMatrix)
 
     yVarMean = self.observedVarY - self.meanVar
