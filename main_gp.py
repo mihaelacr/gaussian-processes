@@ -55,16 +55,6 @@ def gpTest():
 
   plot(x, X, f, y_pred, sigma)
 
-  l = gaussianP._loglikelihood(np.array([0.0, 0.1, 1.0, 1.0]))
-  print "likelihood"
-  print l
-  print type(l)
-
-  lg = gaussianP._loglikilhoodgrad(np.array([0.0, 0.1, 1.0, 1.0]))
-  print "log likelihood grad"
-  print lg
-  print type(lg)
-
   # THIS WILL CHANGE THE HYPERPARAMETERS
   print "optimizing"
   print gaussianP.optimizehyperparams()
@@ -80,9 +70,7 @@ def gpTest():
 
   # my predict still does not work with mutiple instances but doing that is not hard
   y_pred, sigma = gaussianP.predictAll(x)
-
   X = np.concatenate([X, XNew])
-
   plot(x, X, f, y_pred, sigma)
 
   print "optimizing"

@@ -164,7 +164,7 @@ class GaussianProcess(object):
     init[1] = self.noise
     init[2: ] = self.covFunction.hyperparameterValues
 
-    b = [(-10, 10), (0.0, 1.0)]  + [(-200, 200)] * (len(init) - 2)
+    b = [(-10, 10), (0.0, 1.0)]  + [(-150, 150)] * (len(init) - 2)
 
     hypers = optimize.fmin_l_bfgs_b(self._loglikelihood, x0=init,
                                      fprime=self._loglikilhoodgrad,
