@@ -26,7 +26,6 @@ def plot(test, input, f, predicted, sigma):
 
 
 def gpTest():
-
   # Plot the function, the prediction and the 95% confidence interval based on
   # the MSE
   x = np.atleast_2d(np.linspace(0, 10, 100)).T
@@ -52,7 +51,6 @@ def gpTest():
 
   # my predict still does not work with mutiple instances but doing that is not hard
   y_pred, sigma = gaussianP.predictAll(x)
-
   plot(x, X, f, y_pred, sigma)
 
   # THIS WILL CHANGE THE HYPERPARAMETERS
@@ -60,11 +58,8 @@ def gpTest():
   print gaussianP.optimizehyperparams()
 
   XNew = np.array([[0.], [2.], [4.], [9.]])
-   # Observations
   yNew = f(XNew).ravel()
-
   gaussianP.fit(XNew, yNew)
-
   res =  gaussianP.predict(np.array([0.0]))
   print "predict 0.0 after optimization", res
 
@@ -81,7 +76,6 @@ def gpTest():
 
   # my predict still does not work with mutiple instances but doing that is not hard
   y_pred, sigma = gaussianP.predictAll(x)
-
   plot(x, X, f, y_pred, sigma)
 
   # hyper = np.array([0.05914704, 0.72215578])
