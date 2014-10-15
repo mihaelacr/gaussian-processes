@@ -175,6 +175,11 @@ class GaussianProcess(object):
     self.mean = hypers[0]
     self.noise = hypers[1]
     self.covFunction.hyperparameterValues = hypers[2:]
+
+    print "after optimization setting the hyperparmeters"
+    print "the new mean is now", self.mean
+    print "the new noise is now", self.noise
+    print "the new covariance function parameters are now", self.covFunction.hyperparameterValues
     return hypers
 
 
