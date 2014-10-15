@@ -85,8 +85,8 @@ def gpTest():
 
   plot(x, X, f, y_pred, sigma)
 
-  # print "optimizing"
-  # print gaussianP.optimizehyperparams()
+  print "optimizing"
+  print gaussianP.optimizehyperparams()
 
   res =  gaussianP.predict(np.array([0.0]))
   print "predict 0.0 after second optimization and second fit", res
