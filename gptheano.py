@@ -212,28 +212,24 @@ class ARDSquareExponential(CovarianceFunction):
       self.hyperparameterValues = hyperparameterValues
 
     self.hyperparameters = T.dvector('ardhypers')
+    self.l0 = self.hyperparameters[0]
+    self.ls = self.hyperparameters[1:]
 
 
   def covarianceMatrix(self, x1Mat, x2Mat=None):
-    l0 = self.hyperparameters[0]
-    ls = self.hyperparameters[1:]
-    return l0 * T.exp(- distanceSquared(x1Mat, x2Mat, ls))
+    return self.l0 * T.exp(- distanceSquared(x1Mat, x2Mat, self.ls))
 
   def applyVecMat(self, vec, mat):
-    l0 = self.hyperparameters[0]
-    ls = self.hyperparameters[1:]
-    vec = vec / ls
-    mat = mat / ls # TODO: ensure this gets broadcasted properly
+    vec = vec / self.ls
+    mat = mat / self.ls # TODO: ensure this gets broadcasted properly
 
-    return l0 * T.exp(-T.sum((vec - mat) ** 2, axis=1))
+    return self.l0 * T.exp(-T.sum((vec - mat) ** 2, axis=1))
 
   def applyVecVec(self, vec1, vec2):
-    l0 = self.hyperparameters[0]
-    ls = self.hyperparameters[1:]
-    vec1 = vec1 / ls
-    vec2 = vec2 / ls
+    vec1 = vec1 / self.ls
+    vec2 = vec2 / self.ls
 
-    return l0 * T.exp(-T.sum((vec1 - vec2) ** 2))
+    return self.l0 * T.exp(-T.sum((vec1 - vec2) ** 2))
 
 
 
