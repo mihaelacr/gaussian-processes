@@ -7,7 +7,30 @@ import gptheano
 # Let's do some plotting
 from matplotlib import pyplot as pl
 
+def plot(test, input, f, predicted, sigma):
+
+  fig = pl.figure()
+  pl.plot(test, f(test), 'r:', label=u'$f(x) = x\,\sin(x)$')
+  pl.plot(input, f(input), 'r.', markersize=10, label=u'Observations')
+  pl.plot(test, predicted, 'b-', label=u'Prediction')
+  pl.fill(np.concatenate([test, test[::-1]]),
+        np.concatenate([predicted - 1.9600 * sigma,
+                       (predicted + 1.9600 * sigma)[::-1]]),
+        alpha=.5, fc='b', ec='None', label='95% confidence interval')
+  pl.xlabel('$x$')
+  pl.ylabel('$f(x)$')
+  pl.ylim(-10, 20)
+  pl.legend(loc='upper left')
+  pl.show()
+
+
+
 def gpTest():
+
+  # Plot the function, the prediction and the 95% confidence interval based on
+  # the MSE
+  x = np.atleast_2d(np.linspace(0, 10, 100)).T
+  print x.shape
 
   def f(x):
       """The function to predict."""
@@ -19,47 +42,18 @@ def gpTest():
   print X
   # Observations
   y = f(X).ravel()
-  print y
-  meanY = np.mean(y)
 
-  # you have to subtract the mean to kind of make sure they have mean 0
-  # y = y - meanY
-
-  print "meanY"
-  print meanY
-
-  # gaussianP = gp.GaussianProcess(covFunction=gp.SquaredExponential())
-  gaussianP = gptheano.GaussianProcess(covFunction=gptheano.ARDSquareExponential(1), noise=0.01)
+  gaussianP = gptheano.GaussianProcess(covFunction=gptheano.ARDSquareExponential(1), noise=0.1)
   gaussianP.fit(X, y)
   res =  gaussianP.predict(np.array([0.0]))
   # res =  gaussianP.predict(0.0)
   print "predict"
   print res
 
-  # Plot the function, the prediction and the 95% confidence interval based on
-  # the MSE
-  x = np.atleast_2d(np.linspace(0, 10, 100)).T
-  print x.shape
   # my predict still does not work with mutiple instances but doing that is not hard
   y_pred, sigma = gaussianP.predictAll(x)
 
-  # y_pred = y_pred + meanY
-
-
-
-  fig = pl.figure()
-  pl.plot(x, f(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
-  pl.plot(X, f(X), 'r.', markersize=10, label=u'Observations')
-  pl.plot(x, y_pred, 'b-', label=u'Prediction')
-  pl.fill(np.concatenate([x, x[::-1]]),
-        np.concatenate([y_pred - 1.9600 * sigma,
-                       (y_pred + 1.9600 * sigma)[::-1]]),
-        alpha=.5, fc='b', ec='None', label='95% confidence interval')
-  pl.xlabel('$x$')
-  pl.ylabel('$f(x)$')
-  pl.ylim(-10, 20)
-  pl.legend(loc='upper left')
-  pl.show()
+  plot(x, X, f, y_pred, sigma)
 
   l = gaussianP._loglikelihood(np.array([0.0, 0.1, 1.0, 1.0]))
   print "likelihood"
@@ -71,52 +65,54 @@ def gpTest():
   print lg
   print type(lg)
 
-
-
   # THIS WILL CHANGE THE HYPERPARAMETERS
-  print "resulting"
+  print "optimizing"
   print gaussianP.optimizehyperparams()
 
   XNew = np.array([[0.], [2.], [4.], [9.]])
-
    # Observations
   yNew = f(XNew).ravel()
 
-  # gaussianP = gp.GaussianProcess(covFunction=gp.SquaredExponential())
   gaussianP.fit(XNew, yNew)
 
   res =  gaussianP.predict(np.array([0.0]))
-  print "res", res
+  print "predict 0.0 after optimization", res
 
-  x = np.atleast_2d(np.linspace(0, 10, 100)).T
-  print x.shape
   # my predict still does not work with mutiple instances but doing that is not hard
   y_pred, sigma = gaussianP.predictAll(x)
 
   X = np.concatenate([X, XNew])
 
-  fig = pl.figure()
-  pl.plot(x, f(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
-  pl.plot(X, f(X), 'r.', markersize=10, label=u'Observations')
-  pl.plot(x, y_pred, 'b-', label=u'Prediction')
-  pl.fill(np.concatenate([x, x[::-1]]),
-        np.concatenate([y_pred - 1.9600 * sigma,
-                       (y_pred + 1.9600 * sigma)[::-1]]),
-        alpha=.5, fc='b', ec='None', label='95% confidence interval')
-  pl.xlabel('$x$')
-  pl.ylabel('$f(x)$')
-  pl.ylim(-10, 20)
-  pl.legend(loc='upper left')
-  pl.show()
+  plot(x, X, f, y_pred, sigma)
 
-  # # Do the prediction again after we have fitted the hyperparameters to
-  # # maximize likelihood
+  # print "optimizing"
+  # print gaussianP.optimizehyperparams()
+
+  res =  gaussianP.predict(np.array([0.0]))
+  print "predict 0.0 after second optimization and second fit", res
+
+  # my predict still does not work with mutiple instances but doing that is not hard
+  y_pred, sigma = gaussianP.predictAll(x)
+
+  plot(x, X, f, y_pred, sigma)
+
+  # hyper = np.array([0.05914704, 0.72215578])
+  # gaussianP = gptheano.GaussianProcess(covFunction=gptheano.ARDSquareExponential(1, hyperparameterValues=hyper), noise=0.09775293, mean=-0.11918352)
+
+
+  # y = f(X).ravel()
+  # gaussianP.fit(X, y)
+
+  # res =  gaussianP.predict(np.array([0.0]))
+  # print "res", res
+
   # x = np.atleast_2d(np.linspace(0, 10, 100)).T
   # print x.shape
   # # my predict still does not work with mutiple instances but doing that is not hard
   # y_pred, sigma = gaussianP.predictAll(x)
 
-  # print sigma
+  # plot(x, X, f, y_pred, sigma)
+
 
 def main():
   gpTest()
