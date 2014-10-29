@@ -10,6 +10,7 @@ else:
 
 import numpy as np
 from scipy import optimize
+from slice_samping import sliceSample
 
 """Even though theano supports running code on the gpu, for this module this is not needed and it will not exhibit any advantages"""
 
@@ -63,6 +64,7 @@ class GaussianProcess(object):
     self._createTheanoPredictFunction()
     self._createTheanoLogFunction()
     self._createTheanoLogGradFunction()
+    self._createTheanoPosteriorFunction()
 
   """ Creates the theano function that will do the prediction and sets it
       as a field in the GP object.
@@ -78,8 +80,15 @@ class GaussianProcess(object):
     inputs = [predictionVar, self.covFunction.hyperparameters]
     predictFun = theano.function(inputs=inputs,
                                  outputs=[mean, covariance])
-
     self.predictFun = predictFun
+
+  def _createTheanoPosteriorFunction(self):
+    post = self._posteriorTheano()
+    posteriorFun = theano.function(inputs=self.hyperparameters,
+                                   outputs=[post])
+
+    self.posteriorFun = posteriorFun
+
 
   """ The theano code which contains the prediction logic."""
   def _predictTheano(self, x):
@@ -100,6 +109,36 @@ class GaussianProcess(object):
 
     covariance = KPredictPredict - dot([KPredictObserved, invKObservedObserved, KObservedPredict])
     return mean, covariance
+
+  def _posteriorTheano (self):
+    covarianceMatrix = self.covFunction.covarianceMatrix(self.observedVarX)
+    covarianceMatrix += self.noiseVar ** 2 * T.identity_like(covarianceMatrix)
+
+    return normalPdfPropoprtional(self.observedVarY, self.meanVar, covarianceMatrix)
+
+  # TODO: check how to change the algorithms to sample from the
+  # log distribution
+  # TODO: check how you sample for the different parts
+  # Given the data in the gp, define a posterior over the hyperparameters
+  # sample from that distribution to get a sample value for hyperparameters
+  def sampleHyperparams(self, nrSamples):
+    # p(phi | x, y) ~ p(x, y | phi) p(phi)
+    # with a uniform prior on the hyperparameters
+    # p(phi | x, y) ~ p(x, y | phi) = p(y | phi, x) p (x | phi) ~ p(y| phi, x)
+    # p(phi | x, y) ~ p(y| phi, x)
+
+    # you need to set the posterior to the probability given the hyperparams get this value
+    # this can only be done using a theano function
+    distribution = lambda phi: self.posteriorFun(phi)
+
+    hyperparameterValues = np.zeros(len(self.covFunction.hyperparameterValues) + 2)
+    hyperparameterValues[0] = self.mean
+    hyperparameterValues[1] = self.noise
+    hyperparameterValues[2:] = self.covFunction.hyperparameterValues
+    steps = 0.01 * np.ones(len(hyperparameterValues))
+
+    return sliceSample(distribution, steps, nrSamples, 100, hyperparameterValues)
+
 
 
   """ Predicts multiple data instances."""
@@ -161,6 +200,9 @@ class GaussianProcess(object):
 
   # here you also have to optimize the hypers from the mean function
   # you  might just have to admit it will just be a constant to not overcomplicate things
+
+  # DO not use this. Prefer the sampling method because that is more stable
+  # the optimization here does not work well
   def optimizehyperparams(self):
     init = np.zeros(len(self.covFunction.hyperparameterValues) + 2, dtype='float')
     init[0] = self.mean
@@ -169,15 +211,15 @@ class GaussianProcess(object):
 
     print "init", init
 
-    b = [(-10, 10), (-10, 10)]  + [(-100, 100)] * (len(init) - 2)
+    b = [(-10, 10), (0, 1)]  + [(-100, 100)] * (len(init) - 2)
 
-    hypers = optimize.fmin_l_bfgs_b(self._loglikelihood, x0=init,
-                                     fprime=self._loglikilhoodgrad,
-                                     bounds=b,
-                                     args=(), disp=0, maxiter=50)
+    hypers = optimize.minimize(self._loglikelihood, x0=init, method='L-BFGS-B',
+                                     jac=self._loglikilhoodgrad, bounds=b,
+                                     args=())
 
     print "optimization status", hypers
-    hypers = hypers[0] # optimize also returns some data about the procedure, ignore that
+    # assert hypers['success']
+    hypers = hypers['x'] # optimize also returns some data about the procedure, ignore that
 
     # Now set the mean the the optimized hyperparameters
     self.mean = hypers[0]
@@ -272,3 +314,7 @@ def choleskySolver(a, res):
   l = sl.cholesky(a)
   intermiediate = sl.solve(l, res)
   return sl.solve(l.T, intermiediate)
+
+# check the dimension of this
+def normalPdfPropoprtional(x, mean, cov):
+  return 1.0 / T.sqrt(nl.det(cov)) * T.exp(dot([(x - mean).T, nl.inv(cov), x - mean]))
