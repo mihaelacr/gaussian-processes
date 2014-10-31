@@ -54,9 +54,9 @@ def gpTest():
   plot(x, X, f, y_pred, sigma)
 
   # THIS WILL CHANGE THE HYPERPARAMETERS
-  print "optimizing"
-  res = gaussianP.optimizehyperparams()
-  print "returned hyperparams", res
+  # print "optimizing"
+  # res = gaussianP.optimizehyperparams()
+  # print "returned hyperparams", res
 
   XNew = np.array([[0.], [2.], [4.], [9.]])
   yNew = f(XNew).ravel()
@@ -64,24 +64,30 @@ def gpTest():
   res =  gaussianP.predict(np.array([0.0]))
   print "predict 0.0 after optimization", res
 
-  # my predict still does not work with mutiple instances but doing that is not hard
-  y_pred, sigma = gaussianP.predictAll(x)
-  X = np.concatenate([X, XNew])
-  plot(x, X, f, y_pred, sigma)
+  sample = gaussianP.sampleHyperparams(1)
+  print sample
 
-  res =  gaussianP.predict(np.array([0.0]))
-  print "predict 0.0 after first optimization and second fit", res
 
-  print "optimizing"
-  res = gaussianP.optimizehyperparams()
-  print "returned hyperparams", res
+  # # my predict still does not work with mutiple instances but doing that is not hard
+  # y_pred, sigma = gaussianP.predictAll(x)
+  # X = np.concatenate([X, XNew])
+  # plot(x, X, f, y_pred, sigma)
 
-  res =  gaussianP.predict(np.array([0.0]))
-  print "predict 0.0 after second optimization and second fit", res
+  # res =  gaussianP.predict(np.array([0.0]))
+  # print "predict 0.0 after first optimization and second fit", res
 
-  # my predict still does not work with mutiple instances but doing that is not hard
-  y_pred, sigma = gaussianP.predictAll(x)
-  plot(x, X, f, y_pred, sigma)
+  # print "optimizing"
+  # res = gaussianP.optimizehyperparams()
+  # print "returned hyperparams", res
+
+  # res =  gaussianP.predict(np.array([0.0]))
+  # print "predict 0.0 after second optimization and second fit", res
+
+  # # my predict still does not work with mutiple instances but doing that is not hard
+  # y_pred, sigma = gaussianP.predictAll(x)
+  # plot(x, X, f, y_pred, sigma)
+
+
 
   # hyper = np.array([0.05914704, 0.72215578])
   # gaussianP = gptheano.GaussianProcess(covFunction=gptheano.ARDSquareExponential(1, hyperparameterValues=hyper), noise=0.09775293, mean=-0.11918352)

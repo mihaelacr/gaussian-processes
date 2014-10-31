@@ -10,7 +10,7 @@ else:
 
 import numpy as np
 from scipy import optimize
-from slice_samping import sliceSample
+from slice_sampling import sliceSample
 
 """Even though theano supports running code on the gpu, for this module this is not needed and it will not exhibit any advantages"""
 
@@ -129,16 +129,20 @@ class GaussianProcess(object):
 
     # you need to set the posterior to the probability given the hyperparams get this value
     # this can only be done using a theano function
-    distribution = lambda phi: self.posteriorFun(phi)
+    def distribution(phi):
+      res = self.posteriorFun(phi[0], phi[1], phi[2:])[0]
+      assert not np.isinf(res), "infinite likelihood for hyperparameters" + str(phi)
+      return res
+    # distribution = lambda phi: self.posteriorFun(phi)
 
     hyperparameterValues = np.zeros(len(self.covFunction.hyperparameterValues) + 2)
     hyperparameterValues[0] = self.mean
     hyperparameterValues[1] = self.noise
     hyperparameterValues[2:] = self.covFunction.hyperparameterValues
-    steps = 0.01 * np.ones(len(hyperparameterValues))
+    # this should be an argument
+    steps = 0.5 * np.ones(len(hyperparameterValues), dtype='float')
 
     return sliceSample(distribution, steps, nrSamples, 100, hyperparameterValues)
-
 
 
   """ Predicts multiple data instances."""
@@ -310,6 +314,7 @@ def distanceSquared(x1, x2=None, ls=None):
 def dot(mats):
   return reduce(T.dot, mats)
 
+# Does not seem to work with gradient, ignore this for now
 def choleskySolver(a, res):
   l = sl.cholesky(a)
   intermiediate = sl.solve(l, res)
@@ -317,4 +322,4 @@ def choleskySolver(a, res):
 
 # check the dimension of this
 def normalPdfPropoprtional(x, mean, cov):
-  return 1.0 / T.sqrt(nl.det(cov)) * T.exp(dot([(x - mean).T, nl.inv(cov), x - mean]))
+  return 1.0 / T.sqrt(nl.det(cov)) * T.exp(dot([(x - mean).T, nl.matrix_inverse(cov), x - mean]))
