@@ -223,10 +223,6 @@ class GaussianProcess(object):
     mean = hyperparameters[0]
     noise = hyperparameters[1]
     covHyperparams = hyperparameters[2:]
-    # make the loop with the jitter here, even though this is not the most optimal thing
-    # because of the evaluation with theano, you cannot check
-    # if the covariance matrix is inveritble or not
-    # Again TODO: move to choesky once the solve and the gradient are in place
 
     res = self.logFun(mean, noise, covHyperparams, 0)[0]
     if not np.isnan(res):
@@ -267,9 +263,6 @@ class GaussianProcess(object):
     res[2: ] = ret[2]
     return res
 
-  # here you also have to optimize the hypers from the mean function
-  # you  might just have to admit it will just be a constant to not overcomplicate things
-
   # DO not use this. Prefer the sampling method because that is more stable
   # the optimization here does not work well
   def optimizehyperparams(self):
@@ -286,10 +279,6 @@ class GaussianProcess(object):
 
     # print "optimization status", hypers
     # hypers = hypers[0] # optimize also returns some data about the procedure, ignore that
-
-
-
-
     hypers = optimize.minimize(self._loglikelihood, x0=init, method='L-BFGS-B',
                                      jac=self._loglikilhoodgrad, bounds=None,
                                      args=())

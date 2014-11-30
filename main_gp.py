@@ -10,7 +10,6 @@ from termcolor import colored
 from matplotlib import pyplot as pl
 
 def plot(test, input, f, predicted, sigma):
-
   fig = pl.figure()
   pl.plot(test, f(test), 'r:', label=u'$f(x) = x\,\sin(x)$')
   pl.plot(input, f(input), 'r.', markersize=10, label=u'Observations')
@@ -25,8 +24,6 @@ def plot(test, input, f, predicted, sigma):
   pl.legend(loc='upper left')
   pl.show()
 
-
-
 def gpTest():
   # Plot the function, the prediction and the 95% confidence interval based on
   # the MSE
@@ -38,9 +35,7 @@ def gpTest():
       return x * np.sin(x)
 
   X = np.array([[1.], [3.], [5.], [6.], [7.], [8.]])
-  # X = np.array([1., 3., 5., 6., 7., 8.])
 
-  print X
   # Observations
   y = f(X).ravel()
 
@@ -59,9 +54,9 @@ def gpTest():
   print colored("likelihood before optimizing " + str(likelihood), 'green')
 
   # THIS WILL CHANGE THE HYPERPARAMETERS
-  # print "optimizing"
-  # res = gaussianP.optimizehyperparams()
-  # print "returned hyperparams", res
+  print "optimizing"
+  res = gaussianP.optimizehyperparams()
+  print "returned hyperparams", res
 
   likelihood = gaussianP.loglikelihood()
   print colored("likelihood after optimizing " + str(likelihood), 'green')
@@ -92,8 +87,6 @@ def gpTest():
   # my predict still does not work with mutiple instances but doing that is not hard
   y_pred, sigma = gaussianP.predictAll(x)
   plot(x, gaussianP.observedX, f, y_pred, sigma)
-
-
 
   # y = f(X).ravel()
   # gaussianP.fit(X, y)
