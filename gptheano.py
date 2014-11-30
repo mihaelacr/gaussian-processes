@@ -14,11 +14,8 @@ from slice_sampling import sliceSample
 
 """Even though theano supports running code on the gpu, for this module this is not needed and it will not exhibit any advantages"""
 
-""" TODO: check that the optimization now works (after adding jitter)"""
-
-# Now what  I have to do is implement the jitter thing like here
+# The jitter idea is taken from hear
 # https://github.com/JasperSnoek/spearmint/blob/master/spearmint/spearmint/gp.py#L188
-# this fixes the problem with the semi definitivness of the matrix
 
 class GaussianProcess(object):
 
@@ -83,6 +80,8 @@ class GaussianProcess(object):
     self._createTheanoLogGradFunction()
     self._createTheanoPosteriorFunction()
 
+    # this should solve the problem also inside the optimization because the
+    # covarinceMatrix function depends on the hyperparameters
   def _buildCovarianceMatrixSymbolically(self):
     # should the mean be included here
     KObservedObserved = self.covFunction.covarianceMatrix(self.observedVarX)
@@ -104,7 +103,6 @@ class GaussianProcess(object):
     # variable
     jitter = 0.001
     while nl.det(KObservedObserved + jitter ** 2 * T.identity_like(KObservedObserved)) == 0:
-      print "jitter", jitter
       jitter = jitter * 1.1
 
     self.KObservedObserved = KObservedObserved + jitter ** 2 * T.identity_like(KObservedObserved)
@@ -266,15 +264,6 @@ class GaussianProcess(object):
 
     print "optimization status", hypers
     hypers = hypers[0] # optimize also returns some data about the procedure, ignore that
-
-    # hypers = optimize.minimize(self._loglikelihood, x0=init, method='L-BFGS-B',
-    #                                  jac=self._loglikilhoodgrad, bounds=None,
-    #                                  args=())
-
-    # print "optimization status", hypers
-    # assert hypers['success']
-    # I still cannot manage to make the optimization succesfull
-    # hypers = hypers['x'] # optimize also returns some data about the procedure, ignore that
 
     # Now set the mean the the optimized hyperparameters
     self.mean = hypers[0]
