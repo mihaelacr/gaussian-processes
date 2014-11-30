@@ -14,6 +14,12 @@ from slice_sampling import sliceSample
 
 """Even though theano supports running code on the gpu, for this module this is not needed and it will not exhibit any advantages"""
 
+""" TODO: check that the optimization now works (after adding jitter)"""
+
+# Now what  I have to do is implement the jitter thing like here
+# https://github.com/JasperSnoek/spearmint/blob/master/spearmint/spearmint/gp.py#L188
+# this fixes the problem with the semi definitivness of the matrix
+
 class GaussianProcess(object):
 
   """ Initialize the object
@@ -28,13 +34,20 @@ class GaussianProcess(object):
     self.observedY = None
     self.noise = noise
 
+    self.jitter = 0
+
     self.meanVar = T.dscalar('meanVar')
     self.noiseVar = T.dscalar('noiseVar')
+    self.jitterVar = T.dscalar('jitterVar')
 
     self.hyperparameters = [self.meanVar, self.noiseVar, self.covFunction.hyperparameters]
 
+
   def predict(self, x):
-    return self.predictFun(x, self.covFunction.hyperparameterValues)
+    # we might have to loop here as well to jitter
+    # this is required for the first prediction: the one without doing any optimization before
+    # adding the jitter here does not seem to change anything
+    return self.predictFun(x, self.mean, self.noise, self.covFunction.hyperparameterValues, 0)
 
   # TODO: work with being able to add data incrementally
   def fit(self, x, y):
@@ -59,12 +72,39 @@ class GaussianProcess(object):
     self.observedVarX = T.as_tensor_variable(self.observedX, name='varX')
     self.observedVarY = T.as_tensor_variable(self.observedY, name='varY')
 
+    print "observed data"
+    print self.observedX
+    print self.observedY
+
+    # Build the covariance matrix of the data (symbolically)
+    self._buildCovarianceMatrixSymbolically()
+
     # The symbolic variable for prediction
     self.predictionVar = T.dvector("predictionVar")
     self._createTheanoPredictFunction()
     self._createTheanoLogFunction()
     self._createTheanoLogGradFunction()
     self._createTheanoPosteriorFunction()
+
+  def _buildCovarianceMatrixSymbolically(self):
+    # should the mean be included here
+    KObservedObserved = self.covFunction.covarianceMatrix(self.observedVarX)
+    KObservedObserved += self.noiseVar ** 2 * T.identity_like(KObservedObserved)
+
+    # should the jitter variable be included here as well?
+    # probably it should be the same jitter that was used in the fitting
+    # to avoid the psd problem we should also use the jitter here
+
+    # was the jitter variable already set? Unless you did some likelihood stuff then no
+    # and in that case we would have to add a loop here as well
+    KObservedObserved += self.jitterVar ** 2 * T.identity_like(KObservedObserved)
+
+    self.KObservedObserved = KObservedObserved
+
+    # TODO: Move to Cholesky when possible, after theano implemented solve_triangular
+    # And when Cholesky gradient is implemented
+    invKObservedObserved = nl.matrix_inverse(self.KObservedObserved)
+    self.invKObservedObserved = invKObservedObserved
 
   """ Creates the theano function that will do the prediction and sets it
       as a field in the GP object.
@@ -74,17 +114,15 @@ class GaussianProcess(object):
   """
   def _createTheanoPredictFunction(self):
     predictionVar = T.dvector("predictionVar")
-
     mean, covariance = self._predictTheano(predictionVar)
-
-    inputs = [predictionVar, self.covFunction.hyperparameters]
+    inputs = [predictionVar] + self.hyperparameters + [self.jitterVar]
     predictFun = theano.function(inputs=inputs,
                                  outputs=[mean, covariance])
     self.predictFun = predictFun
 
   def _createTheanoPosteriorFunction(self):
     post = self._posteriorTheano()
-    posteriorFun = theano.function(inputs=self.hyperparameters,
+    posteriorFun = theano.function(inputs=self.hyperparameters + [self.jitterVar],
                                    outputs=[post])
 
     self.posteriorFun = posteriorFun
@@ -92,29 +130,17 @@ class GaussianProcess(object):
 
   """ The theano code which contains the prediction logic."""
   def _predictTheano(self, x):
-    KObservedObserved = self.covFunction.covarianceMatrix(self.observedVarX)
-    KObservedObserved += self.noise ** 2 * T.identity_like(KObservedObserved)
-
-    # TODO: Move to cholesky when possible
-    # after theano implemented solve_triangular
-    invKObservedObserved = nl.matrix_inverse(KObservedObserved)
-
     KPredictObserved = self.covFunction.applyVecMat(x, self.observedVarX)
     KObservedPredict = self.covFunction.applyVecMat(self.observedVarX, x)
     KPredictPredict  = self.covFunction.applyVecVec(x, x)
 
-    # Use the mean constant not the mean var because this is not related to the optimization
-    # so you use the hyperparameter values anyway for prediction
-    mean = self.mean + dot([KPredictObserved, invKObservedObserved, self.observedVarY - self.mean])
+    mean = self.meanVar + dot([KPredictObserved, self.invKObservedObserved, self.observedVarY - self.meanVar])
+    covariance = KPredictPredict - dot([KPredictObserved, self.invKObservedObserved, KObservedPredict])
 
-    covariance = KPredictPredict - dot([KPredictObserved, invKObservedObserved, KObservedPredict])
     return mean, covariance
 
-  def _posteriorTheano (self):
-    covarianceMatrix = self.covFunction.covarianceMatrix(self.observedVarX)
-    covarianceMatrix += self.noiseVar ** 2 * T.identity_like(covarianceMatrix)
-
-    return normalPdfPropoprtional(self.observedVarY, self.meanVar, covarianceMatrix)
+  def _posteriorTheano(self):
+    return normalPdfPropoprtional(self.observedVarY, self.meanVar, self.KObservedObserved)
 
   # TODO: check how to change the algorithms to sample from the
   # log distribution
@@ -129,11 +155,24 @@ class GaussianProcess(object):
 
     # you need to set the posterior to the probability given the hyperparams get this value
     # this can only be done using a theano function
+
+    # I think here there is no need to record the jitter
     def distribution(phi):
-      res = self.posteriorFun(phi[0], phi[1], phi[2:])[0]
+      res = self.posteriorFun(phi[0], phi[1], phi[2:], 0)[0]
+      if not np.isinf(res):
+        self.jitter = 0 # currently this causes no concurrency issues because we do not support multi threading
+        # but running sampling in parallel with the log likelihood we might end into some stuff
+        return res
+
+      jitter = 0.001
+      while np.isinf(res):
+        res = self.posteriorFun(phi[0], phi[1], phi[2:], jitter)[0]
+        print jitter
+        jitter = jitter * 1.1
+
       assert not np.isinf(res), "infinite likelihood for hyperparameters" + str(phi)
+      self.jitter = jitter
       return res
-    # distribution = lambda phi: self.posteriorFun(phi)
 
     hyperparameterValues = np.zeros(len(self.covFunction.hyperparameterValues) + 2)
     hyperparameterValues[0] = self.mean
@@ -154,20 +193,15 @@ class GaussianProcess(object):
 
   """ Only required for hyperparmeter optimization"""
   def _theanolog(self):
-    covarianceMatrix = self.covFunction.covarianceMatrix(self.observedVarX)
-    covarianceMatrix += self.noiseVar ** 2 * T.identity_like(covarianceMatrix)
-
-    invKObservedObserved = nl.matrix_inverse(covarianceMatrix)
-
     yVarMean = self.observedVarY - self.meanVar
 
-    loglike = T.log(1./ T.sqrt(2 * np.pi * nl.det(covarianceMatrix))) - 1./2 * dot([yVarMean.T, invKObservedObserved, yVarMean])
+    loglike = T.log(1./ T.sqrt(2 * np.pi * nl.det(self.KObservedObserved))) - 1./2 * dot([yVarMean.T, self.invKObservedObserved, yVarMean])
     return loglike
 
   """ Only required for hyperparmeter optimization"""
   def _createTheanoLogFunction(self):
     loglike = self._theanolog()
-    logFun = theano.function(inputs=self.hyperparameters,
+    logFun = theano.function(inputs=self.hyperparameters + [self.jitterVar],
                                  outputs=[loglike])
 
     self.logFun = logFun
@@ -177,7 +211,7 @@ class GaussianProcess(object):
     loglike = self._theanolog()
     gradLike = T.grad(loglike, self.hyperparameters)
 
-    logGradFun = theano.function(inputs=self.hyperparameters,
+    logGradFun = theano.function(inputs=self.hyperparameters + [self.jitterVar],
                                  outputs=gradLike)
 
     self.logGradFun = logGradFun
@@ -189,13 +223,44 @@ class GaussianProcess(object):
     mean = hyperparameters[0]
     noise = hyperparameters[1]
     covHyperparams = hyperparameters[2:]
-    return self.logFun(mean, noise, covHyperparams)[0]
+    # make the loop with the jitter here, even though this is not the most optimal thing
+    # because of the evaluation with theano, you cannot check
+    # if the covariance matrix is inveritble or not
+    # Again TODO: move to choesky once the solve and the gradient are in place
+
+    res = self.logFun(mean, noise, covHyperparams, 0)[0]
+    if not np.isnan(res):
+      self.jitter = 0
+      return res
+
+    jitter = 0.001 # Check if this is reasonable
+    while np.isnan(res):
+      res = self.logFun(mean, noise, covHyperparams, jitter)[0]
+      jitter = jitter * 1.1
+
+    self.jitter = jitter
+    print "resulting jitter", jitter
+    return res
+
+
+  def getHyperParamVector(self):
+    hyper = np.zeros(len(self.covFunction.hyperparameterValues) + 2, dtype='float')
+    hyper[0] = self.mean
+    hyper[1] = self.noise
+    hyper[2: ] = self.covFunction.hyperparameterValues
+
+    print "hyper", hyper
+    return hyper
+
+  def loglikelihood(self):
+    return self._loglikelihood(self.getHyperParamVector())
 
   def _loglikilhoodgrad(self, hyperparameters):
     mean = hyperparameters[0]
     noise = hyperparameters[1]
     covHyperparams = hyperparameters[2:]
-    ret = self.logGradFun(mean, noise, covHyperparams)
+    # you can remember the jitter and use it here to know which to differentiate
+    ret = self.logGradFun(mean, noise, covHyperparams, self.jitter)
     res = np.zeros(len(self.covFunction.hyperparameterValues) + 2, dtype='float')
     res[0] = ret[0]
     res[1] = ret[1]
@@ -208,21 +273,30 @@ class GaussianProcess(object):
   # DO not use this. Prefer the sampling method because that is more stable
   # the optimization here does not work well
   def optimizehyperparams(self):
-    init = np.zeros(len(self.covFunction.hyperparameterValues) + 2, dtype='float')
-    init[0] = self.mean
-    init[1] = self.noise
-    init[2: ] = self.covFunction.hyperparameterValues
-
+    init = self.getHyperParamVector()
     print "init", init
 
-    b = [(-10, 10), (0, 1)]  + [(-100, 100)] * (len(init) - 2)
+    # b = [(-10, 10), (0, 1)]  + [(-100, 100)] * (len(init) - 2)
+
+    # Not sure about the bounds: should they be here or not
+    # hypers = optimize.fmin_l_bfgs_b(self._loglikelihood, x0=init,
+    #                                  fprime=self._loglikilhoodgrad,
+    #                                  bounds=None,
+    #                                  args=(), disp=0, maxiter=50)
+
+    # print "optimization status", hypers
+    # hypers = hypers[0] # optimize also returns some data about the procedure, ignore that
+
+
+
 
     hypers = optimize.minimize(self._loglikelihood, x0=init, method='L-BFGS-B',
-                                     jac=self._loglikilhoodgrad, bounds=b,
+                                     jac=self._loglikilhoodgrad, bounds=None,
                                      args=())
 
     print "optimization status", hypers
     # assert hypers['success']
+    # I still cannot manage to make the optimization succesfull
     hypers = hypers['x'] # optimize also returns some data about the procedure, ignore that
 
     # Now set the mean the the optimized hyperparameters
