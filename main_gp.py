@@ -3,6 +3,8 @@
 import numpy as np
 import gp
 import gptheano
+from termcolor import colored
+
 
 # Let's do some plotting
 from matplotlib import pyplot as pl
@@ -51,46 +53,46 @@ def gpTest():
 
   # my predict still does not work with mutiple instances but doing that is not hard
   y_pred, sigma = gaussianP.predictAll(x)
-  plot(x, X, f, y_pred, sigma)
+  plot(x, gaussianP.observedX, f, y_pred, sigma)
+
+  likelihood = gaussianP.loglikelihood()
+  print colored("likelihood before optimizing " + str(likelihood), 'green')
 
   # THIS WILL CHANGE THE HYPERPARAMETERS
   # print "optimizing"
   # res = gaussianP.optimizehyperparams()
   # print "returned hyperparams", res
 
+  likelihood = gaussianP.loglikelihood()
+  print colored("likelihood after optimizing " + str(likelihood), 'green')
+
   XNew = np.array([[0.], [2.], [4.], [9.]])
   yNew = f(XNew).ravel()
   gaussianP.fit(XNew, yNew)
-  res =  gaussianP.predict(np.array([0.0]))
-  print "predict 0.0 after optimization", res
 
-  sample = gaussianP.sampleHyperparams(1)
-  print sample
+  # my predict still does not work with mutiple instances but doing that is not hard
+  y_pred, sigma = gaussianP.predictAll(x)
+  plot(x, gaussianP.observedX, f, y_pred, sigma)
 
-
-  # # my predict still does not work with mutiple instances but doing that is not hard
-  # y_pred, sigma = gaussianP.predictAll(x)
-  # X = np.concatenate([X, XNew])
-  # plot(x, X, f, y_pred, sigma)
+  # this is the log likelihood with new data but without optimizing anything
+  likelihood = gaussianP.loglikelihood()
+  print colored("likelihood " + str(likelihood), 'red')
 
   # res =  gaussianP.predict(np.array([0.0]))
   # print "predict 0.0 after first optimization and second fit", res
 
-  # print "optimizing"
-  # res = gaussianP.optimizehyperparams()
-  # print "returned hyperparams", res
+  print "optimizing"
+  res = gaussianP.optimizehyperparams()
+  print "returned hyperparams", res
 
-  # res =  gaussianP.predict(np.array([0.0]))
-  # print "predict 0.0 after second optimization and second fit", res
+  # this is the log likelihood with new data but without optimizing anything
+  likelihood = gaussianP.loglikelihood()
+  print colored("likelihood " + str(likelihood), 'red')
 
-  # # my predict still does not work with mutiple instances but doing that is not hard
-  # y_pred, sigma = gaussianP.predictAll(x)
-  # plot(x, X, f, y_pred, sigma)
+  # my predict still does not work with mutiple instances but doing that is not hard
+  y_pred, sigma = gaussianP.predictAll(x)
+  plot(x, gaussianP.observedX, f, y_pred, sigma)
 
-
-
-  # hyper = np.array([0.05914704, 0.72215578])
-  # gaussianP = gptheano.GaussianProcess(covFunction=gptheano.ARDSquareExponential(1, hyperparameterValues=hyper), noise=0.09775293, mean=-0.11918352)
 
 
   # y = f(X).ravel()
