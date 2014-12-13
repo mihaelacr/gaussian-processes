@@ -189,7 +189,9 @@ class GaussianProcess(object):
   def _theanolog(self):
     yVarMean = self.observedVarY - self.meanVar
 
-    loglike = T.log(1./ T.sqrt(2 * np.pi * nl.det(self.KObservedObserved))) - 1./2 * dot([yVarMean.T, self.invKObservedObserved, yVarMean])
+    # TODO: potential source of bug: log(0). here you need to have self.K
+    loglike = - T.log(nl.det(self.KObservedObserved)) \
+                  - dot([yVarMean.T, self.invKObservedObserved, yVarMean])
     return loglike
 
   """ Only required for hyperparmeter optimization"""
