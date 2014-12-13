@@ -160,7 +160,8 @@ class GaussianProcess(object):
 
     # I think here there is no need to record the jitter
     def distribution(phi):
-      res = self.posteriorFun(phi[0], phi[1], phi[2:], 0)[0]
+      # TODO: what is the last 0??
+      res = self.posteriorFun(phi[0], phi[1], phi[2:])[0]
 
       assert not np.isinf(res), "infinite likelihood for hyperparameters" + str(phi)
 
