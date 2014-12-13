@@ -58,8 +58,8 @@ def gpTest():
   res = gaussianP.optimizehyperparams()
   print "returned hyperparams", res
 
-  likelihood = gaussianP.loglikelihood()
-  print colored("likelihood after optimizing " + str(likelihood), 'green')
+  # likelihood = gaussianP.loglikelihood()
+  # print colored("likelihood after optimizing " + str(likelihood), 'green')
 
   XNew = np.array([[0.], [2.], [4.], [9.]])
   yNew = f(XNew).ravel()

@@ -224,7 +224,7 @@ class GaussianProcess(object):
     return res
 
 
-  def getHyperParamVector(self):
+  def getHyperParamVectorValues(self):
     hyper = np.zeros(len(self.covFunction.hyperparameterValues) + 2, dtype='float')
     hyper[0] = self.mean
     hyper[1] = self.noise
@@ -234,13 +234,13 @@ class GaussianProcess(object):
     return hyper
 
   def loglikelihood(self):
-    return self._loglikelihood(self.getHyperParamVector())
+    return self._loglikelihood(self.getHyperParamVectorValues())
 
   def _loglikilhoodgrad(self, hyperparameters):
     mean = hyperparameters[0]
     noise = hyperparameters[1]
     covHyperparams = hyperparameters[2:]
-    # you can remember the jitter and use it here to know which to differentiate
+
     ret = self.logGradFun(mean, noise, covHyperparams)
     res = np.zeros(len(self.covFunction.hyperparameterValues) + 2, dtype='float')
     res[0] = ret[0]
@@ -251,16 +251,24 @@ class GaussianProcess(object):
   # DO not use this. Prefer the sampling method because that is more stable
   # the optimization here does not work well
   def optimizehyperparams(self):
-    init = self.getHyperParamVector()
+    init = self.getHyperParamVectorValues()
+
     print "init", init
 
-    b = [(None, None), (0, 0.1)]  + [(None, None)] * (len(init) - 2)
+    # with this setting I still get nan eenthough
+    minBound = -10.0
+    maxBound = 10.0
+    # The first bounf is for the mean
+    # The second bound is for the noise
+    # the rest of the bounds are for the hyperparams of the cov matrix
+    b = [(minBound, maxBound), (0, 0.1)]  + [(minBound, maxBound)] * (len(init) - 2)
 
     # Not sure about the bounds: should they be here or not
     hypers = optimize.fmin_l_bfgs_b(self._loglikelihood, x0=init,
                                      fprime=self._loglikilhoodgrad,
                                      bounds=b,
-                                     args=(), disp=0, maxiter=100)
+                                     args=(), disp=0, maxiter=1000)
+
 
     print "optimization status", hypers
     hypers = hypers[0] # optimize also returns some data about the procedure, ignore that
@@ -300,6 +308,7 @@ class SquaredExponential(CovarianceFunction):
 class ARDSquareExponential(CovarianceFunction):
 
   def __init__(self, inputSize, hyperparameterValues=None):
+    self.inputSize = inputSize
     if hyperparameterValues is None:
       self.hyperparameterValues = np.ones(inputSize + 1, dtype='float64')
     else:
@@ -313,9 +322,11 @@ class ARDSquareExponential(CovarianceFunction):
   def covarianceMatrix(self, x1Mat, x2Mat=None):
     return self.l0 * T.exp(- distanceSquared(x1Mat, x2Mat, self.ls))
 
+  # what do these things do?
   def applyVecMat(self, vec, mat):
     vec = vec / self.ls
-    mat = mat / self.ls # TODO: ensure this gets broadcasted properly
+
+    mat = mat / self.ls.reshape((1, self.inputSize)) # TODO: ensure this gets broadcasted properly
 
     return self.l0 * T.exp(-T.sum((vec - mat) ** 2, axis=1))
 
