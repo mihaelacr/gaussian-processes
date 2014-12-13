@@ -14,7 +14,7 @@ from slice_sampling import sliceSample
 
 """Even though theano supports running code on the gpu, for this module this is not needed and it will not exhibit any advantages"""
 
-# The jitter idea is taken from hear
+# The jitter idea is taken from here
 # https://github.com/JasperSnoek/spearmint/blob/master/spearmint/spearmint/gp.py#L188
 
 class GaussianProcess(object):
@@ -38,12 +38,8 @@ class GaussianProcess(object):
 
 
   def predict(self, x):
-    # we might have to loop here as well to jitter
-    # this is required for the first prediction: the one without doing any optimization before
-    # adding the jitter here does not seem to change anything
     return self.predictFun(x, self.mean, self.noise, self.covFunction.hyperparameterValues)
 
-  # TODO: work with being able to add data incrementally
   def fit(self, x, y):
     print "fitting data"
     print "observations shape", x.shape
@@ -87,7 +83,6 @@ class GaussianProcess(object):
     KObservedObserved = self.covFunction.covarianceMatrix(self.observedVarX)
     KObservedObserved += self.noiseVar ** 2 * T.identity_like(KObservedObserved)
 
-
     # TODO: Move to Cholesky when possible, after theano implemented solve_triangular
     # And when Cholesky gradient is implemented
 
@@ -95,13 +90,15 @@ class GaussianProcess(object):
     # are we sure that with this implementation if the det is non zero we can invert?
     def detWithJitter(previousJitter, KObservedObserved):
       # you could return the matrix here already to avoid the double computation
-      covDet = nl.det(KObservedObserved + previousJitter ** 2 * T.identity_like(KObservedObserved))
-      return previousJitter * 1.1, theano.scan_module.until(theano.tensor.neq(covDet, T.constant(0)))
+      jitter = previousJitter * 1.1
+      covDet = nl.det(KObservedObserved + jitter ** 2 * T.identity_like(KObservedObserved))
+      return jitter, theano.scan_module.until(theano.tensor.neq(covDet, T.constant(0)))
 
     jitters, _ = theano.scan(detWithJitter,
                              non_sequences=KObservedObserved,
                              outputs_info=T.constant(1e-8),
                              n_steps=1000)
+
     jitter = jitters[-1]
 
     self.KObservedObserved = KObservedObserved + jitter ** 2 * T.identity_like(KObservedObserved)
