@@ -87,28 +87,28 @@ class GaussianProcess(object):
     KObservedObserved = self.covFunction.covarianceMatrix(self.observedVarX)
     KObservedObserved += self.noiseVar ** 2 * T.identity_like(KObservedObserved)
 
-    # should the jitter variable be included here as well?
-    # probably it should be the same jitter that was used in the fitting
-    # to avoid the psd problem we should also use the jitter here
-
-    # was the jitter variable already set? Unless you did some likelihood stuff then no
-    # and in that case we would have to add a loop here as well
-
 
     # TODO: Move to Cholesky when possible, after theano implemented solve_triangular
     # And when Cholesky gradient is implemented
 
-    # you can add the jitter code here to remove the duplication completely.
-    # in that case you can remove the jitterVar and and just have a numerical
-    # variable
-    jitter = 0.001
-    while nl.det(KObservedObserved + jitter ** 2 * T.identity_like(KObservedObserved)) == 0:
-      jitter = jitter * 1.1
+    # TODO: check what you do with the begining: 0
+    # are we sure that with this implementation if the det is non zero we can invert?
+    def detWithJitter(previousJitter, KObservedObserved):
+      # you could return the matrix here already to avoid the double computation
+      covDet = nl.det(KObservedObserved + previousJitter ** 2 * T.identity_like(KObservedObserved))
+      return previousJitter * 1.1, theano.scan_module.until(theano.tensor.neq(covDet, T.constant(0)))
+
+    jitters, _ = theano.scan(detWithJitter,
+                             non_sequences=KObservedObserved,
+                             outputs_info=T.constant(1e-8),
+                             n_steps=1000)
+    jitter = jitters[-1]
 
     self.KObservedObserved = KObservedObserved + jitter ** 2 * T.identity_like(KObservedObserved)
 
     invKObservedObserved = nl.matrix_inverse(self.KObservedObserved)
     self.invKObservedObserved = invKObservedObserved
+
 
   """ Creates the theano function that will do the prediction and sets it
       as a field in the GP object.
